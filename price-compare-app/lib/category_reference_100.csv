@@ -1,0 +1,101 @@
+category_id,category_name,examples,parent_group
+1,Apples,Different apple varieties and brands,Fresh produce
+2,Bananas,Loose and packaged bananas,Fresh produce
+3,Oranges,Different orange varieties,Fresh produce
+4,Pears,Different pear varieties,Fresh produce
+5,Berries,"Strawberries, blueberries, raspberries",Fresh produce
+6,Other fresh fruit,"Mangoes, grapes, peaches",Fresh produce
+7,Potatoes,"White, red, baking potatoes",Fresh produce
+8,Carrots,Loose and packaged carrots,Fresh produce
+9,Onions,"Red, white, brown onions",Fresh produce
+10,Other root vegetables,"Parsnips, beetroot, turnips",Fresh produce
+11,Leafy vegetables,"Spinach, kale, cabbage",Fresh produce
+12,Salad vegetables,"Lettuce, cucumber, tomatoes",Fresh produce
+13,Other fresh vegetables,"Peppers, broccoli, cauliflower",Fresh produce
+14,Fresh herbs,"Basil, parsley, coriander",Fresh produce
+15,Mushrooms,"Button, chestnut, portobello",Fresh produce
+16,White sliced bread,Standard white loaves,Bread and bakery
+17,Wholemeal sliced bread,Wholemeal and wholegrain loaves,Bread and bakery
+18,Other sliced bread,"Seeded, rye, speciality loaves",Bread and bakery
+19,Bread rolls,"Burger buns, soft rolls",Bread and bakery
+20,Wraps and flatbreads,"Tortilla wraps, pitta bread",Bread and bakery
+21,Croissants,Plain and filled croissants,Bread and bakery
+22,Sweet pastries,"Pain au chocolat, Danish pastries",Bread and bakery
+23,Cakes,"Sponge cakes, cupcakes",Bread and bakery
+24,Doughnuts,"Ring doughnuts, filled doughnuts",Bread and bakery
+25,Savoury pastries,"Sausage rolls, pasties",Bread and bakery
+26,Chicken breast,Fresh chicken breast fillets,Meat and fish
+27,Other chicken cuts,"Chicken thighs, drumsticks",Meat and fish
+28,Beef mince,Different fat percentages of beef mince,Meat and fish
+29,Beef steaks,"Sirloin, rump, ribeye",Meat and fish
+30,Other beef,"Stewing beef, roasting joints",Meat and fish
+31,Pork cuts,"Pork chops, pork steaks",Meat and fish
+32,Bacon,"Back bacon, streaky bacon",Meat and fish
+33,Sausages,"Pork, beef, chicken sausages",Meat and fish
+34,Ham,Sliced cooked ham,Meat and fish
+35,Fresh salmon,Salmon fillets and portions,Meat and fish
+36,White fish,"Cod, haddock, pollock",Meat and fish
+37,Tuna,Fresh tuna steaks,Meat and fish
+38,Prawns,Different varieties of prawns,Meat and fish
+39,Other seafood,"Mussels, squid, crab",Meat and fish
+40,Whole milk,Whole cow's milk,Dairy and chilled
+41,Semi-skimmed milk,Semi-skimmed cow's milk,Dairy and chilled
+42,Skimmed milk,Skimmed cow's milk,Dairy and chilled
+43,Plant-based milk,"Oat, soya, almond milk",Dairy and chilled
+44,Cheddar cheese,"Mild, medium, mature cheddar",Dairy and chilled
+45,Other hard cheese,"Gouda, Edam, Red Leicester",Dairy and chilled
+46,Soft cheese,"Brie, Camembert",Dairy and chilled
+47,Mozzarella,Fresh and block mozzarella,Dairy and chilled
+48,Greek yoghurt,Different brands and fat levels,Dairy and chilled
+49,Natural yoghurt,Plain natural yoghurt,Dairy and chilled
+50,Flavoured yoghurt,"Strawberry, vanilla, fruit yoghurt",Dairy and chilled
+51,Butter,Salted and unsalted butter,Dairy and chilled
+52,Margarine and spreads,Different table spreads,Dairy and chilled
+53,Cream,"Single, double, whipping cream",Dairy and chilled
+54,Eggs,Different sizes and pack quantities,Dairy and chilled
+55,Frozen peas,Different brands of frozen peas,Frozen food
+56,Frozen mixed vegetables,Mixed vegetable bags,Frozen food
+57,Frozen chips,"Straight, crinkle-cut, skin-on",Frozen food
+58,Frozen pizza,Different varieties of frozen pizza,Frozen food
+59,Frozen ready meals,Individual frozen prepared meals,Frozen food
+60,Frozen fish fingers,Different brands and pack sizes,Frozen food
+61,Frozen chicken products,"Nuggets, goujons, breaded chicken",Frozen food
+62,Ice cream,Tubs of ice cream,Frozen food
+63,Frozen desserts,"Frozen cheesecake, gateau",Frozen food
+64,Spaghetti,Dried spaghetti,Cupboard food
+65,Other dried pasta,"Penne, fusilli, macaroni",Cupboard food
+66,Basmati rice,Different brands of basmati rice,Cupboard food
+67,Other long-grain rice,Long-grain white rice,Cupboard food
+68,Brown rice,Different brands of brown rice,Cupboard food
+69,Porridge oats,Rolled oats and instant oats,Cupboard food
+70,Cornflakes,Different brands of cornflakes,Cupboard food
+71,Wheat biscuits,Weetabix-style cereals,Cupboard food
+72,Granola and muesli,Granola and muesli,Cupboard food
+73,Baked beans,Different brands and pack sizes,Cupboard food
+74,Tinned tomatoes,Chopped and whole tomatoes,Cupboard food
+75,Tinned sweetcorn,Different brands and pack sizes,Cupboard food
+76,Tinned soup,Different varieties of soup,Cupboard food
+77,Peanut butter,Smooth and crunchy peanut butter,Cupboard food
+78,Jam,"Strawberry, raspberry, blackcurrant",Cupboard food
+79,Tomato ketchup,Different brands of ketchup,Cupboard food
+80,Mayonnaise,Different brands of mayonnaise,Cupboard food
+81,Cooking oil,"Sunflower, vegetable oil",Cupboard food
+82,Olive oil,Different grades and brands of olive oil,Cupboard food
+83,Plain flour,Different brands of plain flour,Cupboard food
+84,Granulated sugar,Different brands and pack sizes,Cupboard food
+85,Potato crisps,Different brands and flavours,Snacks and drinks
+86,Tortilla chips,Different brands and flavours,Snacks and drinks
+87,Sweet biscuits,"Digestives, rich tea, shortbread",Snacks and drinks
+88,Chocolate biscuits,"Chocolate digestives, wafers",Snacks and drinks
+89,Chocolate bars,Different chocolate bars,Snacks and drinks
+90,Sweets,"Gummy sweets, boiled sweets",Snacks and drinks
+91,Instant coffee,Different brands of instant coffee,Snacks and drinks
+92,Ground coffee,Different brands of ground coffee,Snacks and drinks
+93,Black tea bags,Different brands of black tea,Snacks and drinks
+94,Herbal tea,"Peppermint, chamomile tea",Snacks and drinks
+95,Bottled still water,Different brands and sizes,Snacks and drinks
+96,Cola,Different cola brands,Snacks and drinks
+97,Orange juice,Different brands and varieties,Snacks and drinks
+98,Squash,Different brands and flavours,Snacks and drinks
+99,Toilet paper,Different brands and ply counts,Household and personal care
+100,Toothpaste,Different brands and formulations,Household and personal care
