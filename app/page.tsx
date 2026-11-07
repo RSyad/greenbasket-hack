@@ -18,6 +18,8 @@ import {
   X,
   ListChecks,
   Store,
+  Receipt,
+  Check,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -41,6 +43,7 @@ interface StoreComparison {
 
 interface BasketItem {
   name: string;
+  cheapestItemName?: string;
   category: string;
   currentPriceGBP: number;
   cheapestPriceGBP: number;
@@ -88,32 +91,32 @@ const INITIAL_DATA: BasketComparisonData = {
   userPostcode: "M13 9PL (Manchester Uni)",
   currentBasketTotalGBP: 16.35,
   cheapestStoreName: "Lidl (Oxford Rd • 0.3 mi)",
-  cheapestBasketTotalGBP: 10.65,
+  cheapestBasketTotalGBP: 9.87,
   nearestStoreName: "Tesco Express (0.1 mi • 2 min walk)",
   nearestDistanceMiles: 0.1,
   storeComparisons: [
     {
       storeName: "Lidl (Oxford Rd)",
-      totalBasketGBP: 10.65,
+      totalBasketGBP: 9.87,
       distanceMiles: 0.3,
       walkMinutes: 6,
-      savingsVsCurrentGBP: 5.7,
+      savingsVsCurrentGBP: 6.48,
       tag: "Cheapest & Close",
     },
     {
-      storeName: "Aldi (Hulme / Market St)",
-      totalBasketGBP: 10.85,
+      storeName: "Aldi (Arndale / Hulme)",
+      totalBasketGBP: 10.15,
       distanceMiles: 0.7,
       walkMinutes: 14,
-      savingsVsCurrentGBP: 5.5,
+      savingsVsCurrentGBP: 6.2,
       tag: "Low Price",
     },
     {
       storeName: "Asda Superstore (Hulme)",
-      totalBasketGBP: 12.4,
+      totalBasketGBP: 11.9,
       distanceMiles: 0.8,
       walkMinutes: 16,
-      savingsVsCurrentGBP: 3.95,
+      savingsVsCurrentGBP: 4.45,
       tag: "Large Superstore",
     },
     {
@@ -134,12 +137,54 @@ const INITIAL_DATA: BasketComparisonData = {
     },
   ],
   items: [
-    { name: "Butter 400g", category: "Meat & Dairy", currentPriceGBP: 4.25, cheapestPriceGBP: 2.15, cheapestStore: "Lidl" },
-    { name: "Beef Mince 500g", category: "Meat & Dairy", currentPriceGBP: 3.75, cheapestPriceGBP: 2.49, cheapestStore: "Aldi" },
-    { name: "Cheddar 400g", category: "Meat & Dairy", currentPriceGBP: 3.6, cheapestPriceGBP: 2.35, cheapestStore: "Lidl" },
-    { name: "Crisps 6pk", category: "Snacks & Drinks", currentPriceGBP: 2.1, cheapestPriceGBP: 1.15, cheapestStore: "Lidl" },
-    { name: "Milk 4 Pints", category: "Meat & Dairy", currentPriceGBP: 1.55, cheapestPriceGBP: 1.45, cheapestStore: "Lidl" },
-    { name: "Bananas 5pk", category: "Produce", currentPriceGBP: 1.1, cheapestPriceGBP: 0.78, cheapestStore: "Aldi" },
+    {
+      name: "Lurpak Butter 400g",
+      cheapestItemName: "Danepak Spreadable 500g",
+      category: "Meat & Dairy",
+      currentPriceGBP: 4.25,
+      cheapestPriceGBP: 2.15,
+      cheapestStore: "Lidl (0.3 mi)",
+    },
+    {
+      name: "Beef Steak Mince 500g",
+      cheapestItemName: "British Beef Mince 500g",
+      category: "Meat & Dairy",
+      currentPriceGBP: 3.75,
+      cheapestPriceGBP: 2.49,
+      cheapestStore: "Lidl (0.3 mi)",
+    },
+    {
+      name: "Cathedral City Cheddar 400g",
+      cheapestItemName: "Valley Spire Mature 400g",
+      category: "Meat & Dairy",
+      currentPriceGBP: 3.6,
+      cheapestPriceGBP: 2.35,
+      cheapestStore: "Lidl (0.3 mi)",
+    },
+    {
+      name: "Walkers Crisps 6pk",
+      cheapestItemName: "Snackrite Crisps 6pk",
+      category: "Snacks & Drinks",
+      currentPriceGBP: 2.1,
+      cheapestPriceGBP: 1.15,
+      cheapestStore: "Lidl (0.3 mi)",
+    },
+    {
+      name: "Semi-Skimmed Milk 4pt",
+      cheapestItemName: "British Milk 4 Pints",
+      category: "Meat & Dairy",
+      currentPriceGBP: 1.55,
+      cheapestPriceGBP: 1.45,
+      cheapestStore: "Lidl (0.3 mi)",
+    },
+    {
+      name: "Fairtrade Bananas 5pk",
+      cheapestItemName: "Bananas 5 Pack",
+      category: "Produce",
+      currentPriceGBP: 1.1,
+      cheapestPriceGBP: 0.78,
+      cheapestStore: "Aldi (0.7 mi)",
+    },
   ],
   smartSwaps: [
     {
@@ -174,7 +219,8 @@ export default function BasketScoutPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const [appliedSwapIndices, setAppliedSwapIndices] = useState<number[]>([]);
+  // Track which receipt items are toggled ON for savings (default: all items checked!)
+  const [selectedItemIndices, setSelectedItemIndices] = useState<number[]>();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [copiedList, setCopiedList] = useState(false);
 
@@ -223,7 +269,6 @@ export default function BasketScoutPage() {
 
     setLoading(true);
     setError("");
-    setAppliedSwapIndices([]);
 
     try {
       const res = await fetch("/api/analyze", {
@@ -240,6 +285,8 @@ export default function BasketScoutPage() {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Failed to compare prices");
       setData(result);
+      // Select all items by default on new receipt scan
+      setSelectedItemIndices((result.items || []).map((_: any, i: number) => i));
     } catch (err: any) {
       setError(err.message || "Error comparing grocery basket.");
     } finally {
@@ -247,58 +294,37 @@ export default function BasketScoutPage() {
     }
   };
 
-  const toggleSwap = (idx: number) => {
-    setAppliedSwapIndices((prev) =>
+  const toggleReceiptItem = (idx: number) => {
+    setSelectedItemIndices((prev) =>
       prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx]
     );
   };
 
-  const applyAllSwaps = () => {
-    setAppliedSwapIndices(data.smartSwaps.map((_, idx) => idx));
-  };
+  // Calculate live totals directly from the side-by-side receipt items
+  const originalItemsTotal = data.items.reduce((sum, item) => sum + item.currentPriceGBP, 0);
 
-  const activeMoneySaved = appliedSwapIndices.reduce(
-    (sum, idx) => sum + (data.smartSwaps[idx]?.moneySavedGBP || 0),
-    0
-  );
+  const optimizedItemsTotal = data.items.reduce((sum, item, idx) => {
+    const useCheaper = selectedItemIndices.includes(idx);
+    return sum + (useCheaper ? item.cheapestPriceGBP : item.currentPriceGBP);
+  }, 0);
 
-  const maxSwapSavings = data.smartSwaps.reduce(
-    (sum, s) => sum + (s.moneySavedGBP || 0),
-    0
-  );
-
-  const bestStoreSavings = Math.max(
-    0,
-    data.currentBasketTotalGBP - data.cheapestBasketTotalGBP
-  );
-
-  const liveCostGBP = Math.max(
-    data.cheapestBasketTotalGBP,
-    data.currentBasketTotalGBP - activeMoneySaved
-  );
+  const totalReceiptSavings = Math.max(0, originalItemsTotal - optimizedItemsTotal);
+  const savingsPercentage =
+    originalItemsTotal > 0 ? Math.round((totalReceiptSavings / originalItemsTotal) * 100) : 0;
 
   const generateShoppingListText = () => {
-    const swapsToUse =
-      appliedSwapIndices.length > 0
-        ? appliedSwapIndices.map((i) => data.smartSwaps[i])
-        : data.smartSwaps;
-
     const lines = [
-      `🛒 *BasketScout Cheapest Store Plan (${postcode})*`,
-      `📍 Best Value Store: *${data.cheapestStoreName}* (£${data.cheapestBasketTotalGBP.toFixed(2)} vs £${data.currentBasketTotalGBP.toFixed(2)})`,
-      `💰 Instant Basket Saving: *£${(activeMoneySaved || bestStoreSavings).toFixed(2)}* (£${((activeMoneySaved || bestStoreSavings) * 52).toFixed(0)}/yr)`,
+      `🧾 *BasketScout Side-by-Side Receipt Savings (${postcode})*`,
+      `📍 Switch From: ${data.detectedStore} (£${originalItemsTotal.toFixed(2)})`,
+      `🏆 Switch To: *${data.cheapestStoreName}* (£${optimizedItemsTotal.toFixed(2)})`,
+      `💰 *Total Saved: £${totalReceiptSavings.toFixed(2)} (-${savingsPercentage}%)* | £${(totalReceiptSavings * 52).toFixed(0)}/yr`,
       ``,
-      `🔄 *Top Store & Brand Switches:*`,
-      ...swapsToUse.map(
-        (s, i) =>
-          `${i + 1}. Buy *${s.betterDealSuggestion}* at ${s.targetStore} instead of ${s.originalItem} (Save £${s.moneySavedGBP.toFixed(2)})`
-      ),
-      ``,
-      `📊 *Nearby Store Totals for This Basket:*`,
-      ...data.storeComparisons.map(
-        (st) =>
-          `• ${st.storeName} (${st.distanceMiles} mi, ${st.walkMinutes}m walk): £${st.totalBasketGBP.toFixed(2)}`
-      ),
+      `🛒 *Cheaper Receipt Line-by-Line:*`,
+      ...data.items.map((item, idx) => {
+        const saved = Math.max(0, item.currentPriceGBP - item.cheapestPriceGBP);
+        const targetName = item.cheapestItemName || item.name;
+        return `${idx + 1}. ${targetName} @ ${item.cheapestStore}: *£${item.cheapestPriceGBP.toFixed(2)}* (was £${item.currentPriceGBP.toFixed(2)}, save £${saved.toFixed(2)})`;
+      }),
     ];
     return lines.join("\n");
   };
@@ -322,7 +348,7 @@ export default function BasketScoutPage() {
               BasketScout UK
             </h1>
             <p className="text-xs text-slate-500">
-              Instant Supermarket Price Comparison & Nearest Cheapest Shop Finder
+              Side-by-Side Receipt Price Optimizer & Nearest Cheapest Shop Finder
             </p>
           </div>
         </div>
@@ -330,14 +356,14 @@ export default function BasketScoutPage() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5 text-xs font-semibold bg-blue-50 text-blue-800 px-3 py-2 rounded-full border border-blue-200">
             <MapPin className="w-3.5 h-3.5 text-blue-600" />
-            <span>Receipt Store: {data.detectedStore}</span>
+            <span>Scanned: {data.detectedStore}</span>
           </div>
           <button
             onClick={() => setIsModalOpen(true)}
             className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition cursor-pointer shadow-sm"
           >
-            <ListChecks className="w-4 h-4 text-blue-400" />
-            Export Cheapest Shop Plan
+            <ListChecks className="w-4 h-4 text-emerald-400" />
+            Export Cheaper Receipt List
           </button>
         </div>
       </header>
@@ -346,7 +372,6 @@ export default function BasketScoutPage() {
         {/* LEFT COLUMN: Postcode + Receipt Upload + Sample Pills (4 cols) */}
         <section className="lg:col-span-4 space-y-6">
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            {/* Postcode Input for Nearest Store Calculation */}
             <div className="mb-4">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mb-1.5">
                 <Navigation className="w-3.5 h-3.5 text-blue-600" />
@@ -398,7 +423,7 @@ export default function BasketScoutPage() {
                     Upload Supermarket Receipt (JPG/PNG)
                   </p>
                   <p className="text-xs text-slate-500">
-                    Compares Aldi, Lidl, Asda, Tesco & Sainsbury&apos;s
+                    Generates side-by-side cheaper receipt comparison
                   </p>
                 </div>
               )}
@@ -448,78 +473,245 @@ export default function BasketScoutPage() {
               className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition cursor-pointer"
             >
               <Sparkles className="w-4 h-4" />
-              {loading ? "Comparing Nearby Supermarkets..." : "Find Cheapest & Nearest Shop"}
+              {loading ? "Comparing Receipts..." : "Compare Receipt Side-by-Side"}
             </button>
           </div>
         </section>
 
-        {/* RIGHT COLUMN: 4 KPI Cards + Store Distance Cards + Price Charts + Swaps (8 cols) */}
+        {/* RIGHT COLUMN: KPI Cards + SIDE-BY-SIDE RECEIPTS + Proximity & Charts (8 cols) */}
         <section className="lg:col-span-8 space-y-6">
-          {/* FIXED GRID WRAPPER FOR 4 KPI CARDS */}
+          {/* 4 KPI Metric Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
               <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                <span>Current Receipt</span>
-                <PoundSterling className="w-4 h-4 text-slate-600" />
+                <span>Original Receipt</span>
+                <PoundSterling className="w-4 h-4 text-red-500" />
               </div>
-              <div className="text-2xl font-extrabold text-slate-900">
-                £{liveCostGBP.toFixed(2)}
+              <div className="text-2xl font-extrabold text-slate-900 font-mono">
+                £{originalItemsTotal.toFixed(2)}
               </div>
-              <div className="text-[11px] text-slate-400">
-                {activeMoneySaved > 0
-                  ? `Was £${data.currentBasketTotalGBP.toFixed(2)} (-£${activeMoneySaved.toFixed(2)})`
-                  : `${data.items.length} Items Scanned`}
+              <div className="text-[11px] text-slate-400 truncate">
+                {data.detectedStore}
               </div>
             </div>
 
-            <div className="bg-white p-4 rounded-2xl border border-emerald-200 shadow-sm">
+            <div className="bg-white p-4 rounded-2xl border border-emerald-300 shadow-sm">
               <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                <span>Cheapest Shop</span>
+                <span>Optimized Receipt</span>
                 <ShoppingBag className="w-4 h-4 text-emerald-600" />
               </div>
-              <div className="text-2xl font-extrabold text-emerald-600">
-                £{data.cheapestBasketTotalGBP.toFixed(2)}
+              <div className="text-2xl font-extrabold text-emerald-600 font-mono">
+                £{optimizedItemsTotal.toFixed(2)}
               </div>
               <div className="text-[11px] font-semibold text-emerald-700 truncate">
-                At {data.cheapestStoreName}
+                {data.cheapestStoreName}
               </div>
             </div>
 
-            <div className="bg-white p-4 rounded-2xl border border-blue-200 shadow-sm">
-              <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                <span>Nearest vs Best</span>
-                <MapPin className="w-4 h-4 text-blue-600" />
+            <div className="bg-emerald-900 text-white p-4 rounded-2xl shadow-sm">
+              <div className="flex items-center justify-between text-xs text-emerald-200 mb-1">
+                <span>Instant Savings</span>
+                <TrendingDown className="w-4 h-4 text-emerald-300" />
               </div>
-              <div className="text-lg font-extrabold text-blue-600 truncate">
-                {data.storeComparisons[0]?.distanceMiles || 0.3} mi away
+              <div className="text-2xl font-extrabold text-emerald-300 font-mono">
+                -£{totalReceiptSavings.toFixed(2)}
               </div>
-              <div className="text-[11px] text-slate-500 truncate">
-                {data.storeComparisons[0]?.walkMinutes || 6} min walk to save £{bestStoreSavings.toFixed(2)}
+              <div className="text-[11px] text-emerald-200">
+                Save {savingsPercentage}% on this shop!
               </div>
             </div>
 
             <div className="bg-blue-950 text-white p-4 rounded-2xl shadow-sm">
               <div className="flex items-center justify-between text-xs text-blue-200 mb-1">
-                <span>Yearly Saving</span>
-                <TrendingDown className="w-4 h-4 text-emerald-400" />
+                <span>Yearly Saving (52w)</span>
+                <MapPin className="w-4 h-4 text-blue-400" />
               </div>
-              <div className="text-2xl font-extrabold text-emerald-400">
-                £{((activeMoneySaved || bestStoreSavings || maxSwapSavings) * 52).toFixed(0)}/yr
+              <div className="text-2xl font-extrabold text-white font-mono">
+                £{(totalReceiptSavings * 52).toFixed(0)}/yr
               </div>
-              <div className="text-[11px] text-blue-200">
-                Save £{(activeMoneySaved || bestStoreSavings).toFixed(2)} every weekly shop
+              <div className="text-[11px] text-blue-200 truncate">
+                {data.storeComparisons[0]?.walkMinutes || 6} min walk ({data.storeComparisons[0]?.distanceMiles || 0.3} mi)
+              </div>
+            </div>
+          </div>
+
+          {/* ===================================================================== */}
+          {/* NEW: SIDE-BY-SIDE ORIGINAL RECEIPT VS. SAVED RECEIPT COMPARISON       */}
+          {/* ===================================================================== */}
+          <div className="bg-slate-100 p-5 rounded-2xl border border-slate-200 shadow-inner">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-blue-600" />
+                  Side-by-Side Receipt Comparison
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Left: What you paid • Right: Exact item-by-item savings at nearby supermarkets (click any item on the right to toggle)
+                </p>
+              </div>
+              <button
+                onClick={() =>
+                  setSelectedItemIndices(
+                    selectedItemIndices.length === data.items.length
+                      ? []
+                      : data.items.map((_, i) => i)
+                  )
+                }
+                className="text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-lg transition cursor-pointer shadow-2xs"
+              >
+                {selectedItemIndices.length === data.items.length
+                  ? "Uncheck All Items"
+                  : "Select All Savings"}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* LEFT RECEIPT: ORIGINAL RECEIPT */}
+              <div className="bg-white rounded-xl border border-slate-300 shadow-sm overflow-hidden flex flex-col justify-between relative">
+                {/* Thermal Receipt Top Serrated Edge Accent */}
+                <div className="h-2 bg-repeating-linear-to-r from-slate-200 via-white to-slate-200 border-b border-dashed border-slate-300" />
+
+                <div className="p-5 font-mono">
+                  <div className="text-center border-b-2 border-dashed border-slate-300 pb-3 mb-4">
+                    <span className="inline-block text-[10px] font-sans font-bold uppercase tracking-wider bg-red-100 text-red-700 px-2 py-0.5 rounded-full mb-1">
+                      Original Receipt (What You Paid)
+                    </span>
+                    <h4 className="text-sm font-extrabold text-slate-900 uppercase">
+                      {data.detectedStore}
+                    </h4>
+                    <p className="text-[11px] text-slate-400">
+                      Area: {data.userPostcode} • Convenience Pricing
+                    </p>
+                  </div>
+
+                  {/* Line Items */}
+                  <div className="divide-y divide-dashed divide-slate-200">
+                    {data.items.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="py-2.5 flex items-center justify-between gap-2 min-h-[56px]"
+                      >
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">{item.name}</p>
+                          <span className="text-[10px] text-slate-400 font-sans">
+                            {item.category}
+                          </span>
+                        </div>
+                        <span className="text-sm font-bold text-slate-900 tabular-nums">
+                          £{item.currentPriceGBP.toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Receipt Footer Total */}
+                <div className="bg-slate-50 p-4 border-t-2 border-dashed border-slate-300 font-mono">
+                  <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+                    <span>ITEMS COUNT</span>
+                    <span>{data.items.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-base font-extrabold text-slate-900">
+                    <span>TOTAL PAID</span>
+                    <span>£{originalItemsTotal.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT RECEIPT: OPTIMIZED CHEAPER RECEIPT */}
+              <div className="bg-white rounded-xl border-2 border-emerald-500 shadow-md overflow-hidden flex flex-col justify-between relative">
+                <div className="h-2 bg-emerald-500" />
+
+                <div className="p-5 font-mono">
+                  <div className="text-center border-b-2 border-dashed border-emerald-200 pb-3 mb-4">
+                    <span className="inline-block text-[10px] font-sans font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full mb-1">
+                      Smart Saver Receipt (Save £{totalReceiptSavings.toFixed(2)})
+                    </span>
+                    <h4 className="text-sm font-extrabold text-emerald-950 uppercase">
+                      {data.cheapestStoreName}
+                    </h4>
+                    <p className="text-[11px] text-emerald-700 font-sans font-medium">
+                      📍 {data.storeComparisons[0]?.distanceMiles || 0.3} mi away ({data.storeComparisons[0]?.walkMinutes || 6} min walk)
+                    </p>
+                  </div>
+
+                  {/* Line Items with Savings Badges */}
+                  <div className="divide-y divide-dashed divide-emerald-100">
+                    {data.items.map((item, idx) => {
+                      const isSelected = selectedItemIndices.includes(idx);
+                      const itemSaving = Math.max(0, item.currentPriceGBP - item.cheapestPriceGBP);
+                      return (
+                        <div
+                          key={idx}
+                          onClick={() => toggleReceiptItem(idx)}
+                          className={`py-2 px-2 -mx-2 rounded-lg transition cursor-pointer flex items-center justify-between gap-2 min-h-[56px] ${
+                            isSelected ? "bg-emerald-50/70 hover:bg-emerald-100/60" : "opacity-50 hover:opacity-80"
+                          }`}
+                        >
+                          <div className="flex items-start gap-2 min-w-0">
+                            <div
+                              className={`mt-0.5 w-4 h-4 rounded-sm flex items-center justify-center shrink-0 border ${
+                                isSelected
+                                  ? "bg-emerald-600 border-emerald-600 text-white"
+                                  : "border-slate-300 bg-white"
+                              }`}
+                            >
+                              {isSelected && <Check className="w-3 h-3" />}
+                            </div>
+                            <div className="truncate">
+                              <p className="text-xs font-bold text-emerald-950 truncate">
+                                {item.cheapestItemName || item.name}
+                              </p>
+                              <div className="flex items-center gap-1.5 text-[10px] font-sans">
+                                <span className="text-emerald-700 font-semibold">
+                                  @{item.cheapestStore}
+                                </span>
+                                {itemSaving > 0 && (
+                                  <span className="bg-emerald-600 text-white px-1.5 py-0.2 rounded-sm font-bold">
+                                    Save £{itemSaving.toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <span className="text-sm font-extrabold text-emerald-700 tabular-nums block">
+                              £{(isSelected ? item.cheapestPriceGBP : item.currentPriceGBP).toFixed(2)}
+                            </span>
+                            {isSelected && itemSaving > 0 && (
+                              <span className="text-[10px] line-through text-slate-400 block">
+                                £{item.currentPriceGBP.toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Right Receipt Footer Total + Total Saved */}
+                <div className="bg-emerald-950 text-white p-4 border-t-2 border-dashed border-emerald-700 font-mono">
+                  <div className="flex items-center justify-between text-xs text-emerald-300 mb-1">
+                    <span>YOU SAVE ({savingsPercentage}%)</span>
+                    <span className="font-bold">-£{totalReceiptSavings.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-base font-extrabold text-white">
+                    <span>NEW TOTAL</span>
+                    <span className="text-emerald-400">£{optimizedItemsTotal.toFixed(2)}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           {/* Nearby Supermarket Distance & Basket Total Cards */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Navigation className="w-4 h-4 text-blue-600" />
-                Nearby Supermarkets Ranked by Basket Cost & Walking Distance ({data.userPostcode})
-              </h3>
-            </div>
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3">
+              <Navigation className="w-4 h-4 text-blue-600" />
+              Nearby Supermarkets Ranked by Distance & Basket Total ({data.userPostcode})
+            </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
               {data.storeComparisons.map((store, idx) => {
                 const isCheapest = idx === 0;
@@ -550,12 +742,12 @@ export default function BasketScoutPage() {
                       </p>
                     </div>
                     <div className="mt-3 pt-2 border-t border-slate-200/80 flex items-baseline justify-between">
-                      <span className="text-base font-extrabold text-slate-900">
+                      <span className="text-base font-extrabold text-slate-900 font-mono">
                         £{store.totalBasketGBP.toFixed(2)}
                       </span>
                       {store.savingsVsCurrentGBP > 0 ? (
                         <span className="text-[11px] font-bold text-emerald-700">
-                          Save £{store.savingsVsCurrentGBP.toFixed(2)}
+                          -£{store.savingsVsCurrentGBP.toFixed(2)}
                         </span>
                       ) : (
                         <span className="text-[10px] text-slate-400">Paid</span>
@@ -569,7 +761,6 @@ export default function BasketScoutPage() {
 
           {/* 2 Price Comparison Charts */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Chart 1: Total Basket Cost Across Nearby Stores */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
               <h3 className="text-sm font-bold text-slate-800 mb-1">
                 Same Basket Cost by Nearby Store (£)
@@ -577,7 +768,7 @@ export default function BasketScoutPage() {
               <p className="text-xs text-slate-400 mb-4">
                 Green = Cheapest Store • Blue = Alternatives • Slate = Current
               </p>
-              <div className="h-60 w-full">
+              <div className="h-56 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={data.storeComparisons}
@@ -608,7 +799,6 @@ export default function BasketScoutPage() {
               </div>
             </div>
 
-            {/* Chart 2: Item-by-Item Price Paid vs Cheapest Nearby */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
               <h3 className="text-sm font-bold text-slate-800 mb-1">
                 Item Price: Receipt vs. Cheapest Nearby (£)
@@ -616,7 +806,7 @@ export default function BasketScoutPage() {
               <p className="text-xs text-slate-400 mb-4">
                 Red = What You Paid • Green = Cheapest Nearby Store
               </p>
-              <div className="h-60 w-full">
+              <div className="h-56 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data.items} margin={{ left: 0, right: 10 }}>
                     <XAxis dataKey="name" fontSize={10} />
@@ -625,90 +815,19 @@ export default function BasketScoutPage() {
                     <Legend wrapperStyle={{ fontSize: "11px" }} />
                     <Bar
                       dataKey="currentPriceGBP"
-                      name="Receipt Price (£)"
+                      name="Original Receipt (£)"
                       fill="#ef4444"
                       radius={[4, 4, 0, 0]}
                     />
                     <Bar
                       dataKey="cheapestPriceGBP"
-                      name="Cheapest Nearby (£)"
+                      name="Smart Saver Receipt (£)"
                       fill="#059669"
                       radius={[4, 4, 0, 0]}
                     />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-            </div>
-          </div>
-
-          {/* Interactive Store & Item Switches */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-blue-600" />
-                3 Biggest Price Drops at Nearby Supermarkets
-              </h3>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={applyAllSwaps}
-                  className="text-xs font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 px-3 py-1.5 rounded-lg transition cursor-pointer"
-                >
-                  Apply All 3 Price Drops
-                </button>
-                <button
-                  onClick={() => setIsModalOpen(true)}
-                  className="text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 px-3 py-1.5 rounded-lg transition cursor-pointer"
-                >
-                  Generate Cheapest Shop List ➔
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {data.smartSwaps.map((swap, idx) => {
-                const isApplied = appliedSwapIndices.includes(idx);
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => toggleSwap(idx)}
-                    className={`p-4 rounded-xl border transition cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 ${
-                      isApplied
-                        ? "bg-blue-50/90 border-blue-500 shadow-sm"
-                        : "bg-slate-50/60 border-slate-200 hover:border-blue-400"
-                    }`}
-                  >
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2 text-sm font-bold">
-                        <span className="line-through text-red-600">{swap.originalItem}</span>
-                        <ArrowRight className="w-4 h-4 text-slate-400" />
-                        <span className="text-blue-950">{swap.betterDealSuggestion}</span>
-                      </div>
-                      <p className="text-xs font-semibold text-emerald-700 flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5" />
-                        {swap.targetStore}
-                      </p>
-                      <p className="text-xs text-slate-600">{swap.reason}</p>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="px-2.5 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg">
-                        Save £{swap.moneySavedGBP.toFixed(2)}
-                      </span>
-                      <button
-                        type="button"
-                        className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1 border ${
-                          isApplied
-                            ? "bg-blue-700 text-white border-blue-700"
-                            : "bg-white text-slate-700 border-slate-300"
-                        }`}
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        {isApplied ? "Applied" : "Apply"}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           </div>
         </section>

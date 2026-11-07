@@ -75,7 +75,11 @@ const priceComparisonSchema: Schema = {
       items: {
         type: Type.OBJECT,
         properties: {
-          name: { type: Type.STRING, description: "Item name" },
+          name: { type: Type.STRING, description: "Original receipt item name" },
+          cheapestItemName: {
+            type: Type.STRING,
+            description: "Equivalent cheaper item name at the competitor store (e.g., own-brand equivalent)",
+          },
           category: {
             type: Type.STRING,
             description: "Category (Meat & Dairy, Produce, Bakery & Pantry, Snacks & Drinks)",
@@ -84,7 +88,14 @@ const priceComparisonSchema: Schema = {
           cheapestPriceGBP: { type: Type.NUMBER, description: "Cheapest price at nearby Aldi/Lidl/Asda (£)" },
           cheapestStore: { type: Type.STRING, description: "Store offering the cheapest price" },
         },
-        required: ["name", "category", "currentPriceGBP", "cheapestPriceGBP", "cheapestStore"],
+        required: [
+          "name",
+          "cheapestItemName",
+          "category",
+          "currentPriceGBP",
+          "cheapestPriceGBP",
+          "cheapestStore",
+        ],
       },
     },
     smartSwaps: {
