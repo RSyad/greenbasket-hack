@@ -19,213 +19,139 @@ import {
   Receipt,
   Check,
   Compass,
+  SlidersHorizontal,
 } from "lucide-react";
+import {
+  Shop,
+  ShoppingRequirement,
+  rankAllShops,
+  findCheapestShop,
+} from "@/lib/findCheapestShop";
 
-interface StoreComparison {
-  storeName: string;
-  totalBasketGBP: number;
-  distanceMiles: number;
-  walkMinutes: number;
-  savingsVsCurrentGBP: number;
-  tag: string;
-  lat: number;
-  lng: number;
-}
-
-interface BasketItem {
-  name: string;
-  cheapestItemName?: string;
+interface RequirementWithMeta extends ShoppingRequirement {
+  originalName: string;
   category: string;
-  currentPriceGBP: number;
-  cheapestPriceGBP: number;
-  cheapestStore: string;
+  paidPriceGBP: number;
 }
 
-interface SmartSwap {
-  originalItem: string;
-  betterDealSuggestion: string;
-  targetStore: string;
-  moneySavedGBP: number;
-  reason: string;
-}
-
-interface BasketComparisonData {
+interface ExtractedPayload {
   detectedStore: string;
   userPostcode: string;
-  userLat?: number;
-  userLng?: number;
-  currentBasketTotalGBP: number;
-  cheapestStoreName: string;
-  cheapestBasketTotalGBP: number;
-  nearestStoreName: string;
-  nearestDistanceMiles: number;
-  storeComparisons: StoreComparison[];
-  items: BasketItem[];
-  smartSwaps: SmartSwap[];
+  userLatitude: number;
+  userLongitude: number;
+  requirements: RequirementWithMeta[];
+  shops: Shop[];
 }
 
 const SAMPLE_RECEIPTS = [
   {
     label: "🛒 Tesco Express Oxford Rd (Convenience Markup)",
-    text: "TESCO EXPRESS OXFORD RD MANCHESTER: British Beef Steak Mince 500g £3.75, Cathedral City Mature Cheddar 400g £3.60, Lurpak Spreadable Butter 400g £4.25, Walkers Crisps 6 Pack £2.10, Fairtrade Bananas 5 Pack £1.10, Semi-Skimmed Milk 4 Pints £1.55",
+    text: "TESCO EXPRESS OXFORD RD MANCHESTER: British Beef Steak Mince 500g £3.75, Cathedral City Mature Cheddar 400g £3.60, Lurpak Spreadable Butter 400g £4.25, Walkers Crisps 150g £2.10, Fairtrade Bananas 600g £1.10, Semi-Skimmed Milk 2272g £1.55",
   },
   {
     label: "🛍️ Sainsbury's Local Fallowfield (Student Essentials)",
-    text: "SAINSBURYS LOCAL FALLOWFIELD: Chicken Breast Fillets 600g £5.20, Heinz Baked Beans 4 Pack £3.75, Tropicana Orange Juice 1L £3.00, Barista Oat Milk 1L £2.15, Frozen Pepperoni Pizza £3.25, Pasta Fusilli 500g £1.35",
+    text: "SAINSBURYS LOCAL FALLOWFIELD: Chicken Breast Fillets 600g £5.20, Heinz Baked Beans 1600g £3.75, Orange Juice 1000g £3.00, Barista Oat Milk 1000g £2.15, Frozen Pepperoni Pizza 350g £3.25, Pasta Fusilli 500g £1.35",
   },
   {
     label: "🥖 Co-op Piccadilly (Evening Basket)",
-    text: "CO-OP MANCHESTER: Salmon Fillets 2 Pack £4.85, Ben & Jerry's Tub 465ml £5.50, Olive Oil 500ml £5.20, Free Range Eggs 6 Pack £2.10, Sourdough Loaf £2.30",
+    text: "CO-OP MANCHESTER: Salmon Fillets 240g £4.85, Vanilla Ice Cream Tub 465g £5.50, Olive Oil 500g £5.20, Free Range Eggs 360g £2.10, Sourdough Loaf 400g £2.30",
   },
 ];
 
-const INITIAL_DATA: BasketComparisonData = {
+// Initial dataset structured for your teammate's findCheapestShop.ts engine!
+const INITIAL_PAYLOAD: ExtractedPayload = {
   detectedStore: "Tesco Express (Oxford Rd, M13)",
   userPostcode: "M13 9PL (Manchester Uni)",
-  userLat: 53.4668,
-  userLng: -2.2339,
-  currentBasketTotalGBP: 16.35,
-  cheapestStoreName: "Lidl (Oxford Rd • 0.3 mi)",
-  cheapestBasketTotalGBP: 9.87,
-  nearestStoreName: "Tesco Express (0.1 mi • 2 min walk)",
-  nearestDistanceMiles: 0.1,
-  storeComparisons: [
-    {
-      storeName: "Lidl (Oxford Rd)",
-      totalBasketGBP: 9.87,
-      distanceMiles: 0.3,
-      walkMinutes: 6,
-      savingsVsCurrentGBP: 6.48,
-      tag: "Cheapest & Close",
-      lat: 53.4631,
-      lng: -2.2285,
-    },
-    {
-      storeName: "Aldi (Hulme)",
-      totalBasketGBP: 10.15,
-      distanceMiles: 0.7,
-      walkMinutes: 14,
-      savingsVsCurrentGBP: 6.2,
-      tag: "Low Price",
-      lat: 53.4658,
-      lng: -2.2485,
-    },
-    {
-      storeName: "Asda Superstore (Hulme)",
-      totalBasketGBP: 11.9,
-      distanceMiles: 0.8,
-      walkMinutes: 16,
-      savingsVsCurrentGBP: 4.45,
-      tag: "Large Superstore",
-      lat: 53.4642,
-      lng: -2.2508,
-    },
-    {
-      storeName: "Sainsbury's Local (Oxford Rd)",
-      totalBasketGBP: 15.9,
-      distanceMiles: 0.2,
-      walkMinutes: 4,
-      savingsVsCurrentGBP: 0.45,
-      tag: "Convenience Store",
-      lat: 53.4701,
-      lng: -2.2369,
-    },
-    {
-      storeName: "Tesco Express (Current)",
-      totalBasketGBP: 16.35,
-      distanceMiles: 0.1,
-      walkMinutes: 2,
-      savingsVsCurrentGBP: 0,
-      tag: "Current Store",
-      lat: 53.4682,
-      lng: -2.2351,
-    },
+  userLatitude: 53.4668,
+  userLongitude: -2.2339,
+  requirements: [
+    { itemType: "butter", originalName: "Lurpak Butter 400g", category: "Meat & Dairy", amountGrams: 400, paidPriceGBP: 4.25 },
+    { itemType: "beef mince", originalName: "Beef Steak Mince 500g", category: "Meat & Dairy", amountGrams: 500, paidPriceGBP: 3.75 },
+    { itemType: "cheddar", originalName: "Cathedral City Cheddar 400g", category: "Meat & Dairy", amountGrams: 400, paidPriceGBP: 3.60 },
+    { itemType: "crisps", originalName: "Walkers Crisps 6pk (150g)", category: "Snacks & Drinks", amountGrams: 150, paidPriceGBP: 2.10 },
+    { itemType: "milk", originalName: "Semi-Skimmed Milk 4pt (2272g)", category: "Meat & Dairy", amountGrams: 2272, paidPriceGBP: 1.55 },
+    { itemType: "bananas", originalName: "Fairtrade Bananas (600g)", category: "Produce", amountGrams: 600, paidPriceGBP: 1.10 },
   ],
-  items: [
+  shops: [
     {
-      name: "Lurpak Butter 400g",
-      cheapestItemName: "Danepak Spreadable 500g",
-      category: "Meat & Dairy",
-      currentPriceGBP: 4.25,
-      cheapestPriceGBP: 2.15,
-      cheapestStore: "Lidl (0.3 mi)",
+      name: "Lidl (Oxford Rd)",
+      latitude: 53.4631,
+      longitude: -2.2285,
+      products: [
+        { itemType: "butter", productName: "Danepak Spreadable 500g", amountGrams: 500, costGBP: 2.49 },
+        { itemType: "beef mince", productName: "British Beef Mince 500g", amountGrams: 500, costGBP: 2.49 },
+        { itemType: "cheddar", productName: "Valley Spire Mature 400g", amountGrams: 400, costGBP: 2.35 },
+        { itemType: "crisps", productName: "Snackrite Crisps 150g", amountGrams: 150, costGBP: 1.15 },
+        { itemType: "milk", productName: "British Milk 2272g", amountGrams: 2272, costGBP: 1.45 },
+        { itemType: "bananas", productName: "Bananas 600g", amountGrams: 600, costGBP: 0.78 },
+      ],
     },
     {
-      name: "Beef Steak Mince 500g",
-      cheapestItemName: "British Beef Mince 500g",
-      category: "Meat & Dairy",
-      currentPriceGBP: 3.75,
-      cheapestPriceGBP: 2.49,
-      cheapestStore: "Lidl (0.3 mi)",
+      name: "Aldi (Hulme)",
+      latitude: 53.4658,
+      longitude: -2.2485,
+      products: [
+        { itemType: "butter", productName: "Nordpak Spreadable 500g", amountGrams: 500, costGBP: 2.39 },
+        { itemType: "beef mince", productName: "Ashfields Beef Mince 500g", amountGrams: 500, costGBP: 2.39 },
+        { itemType: "cheddar", productName: "Emporium Mature 400g", amountGrams: 400, costGBP: 2.29 },
+        { itemType: "crisps", productName: "Snackrite Multipack 150g", amountGrams: 150, costGBP: 1.09 },
+        { itemType: "milk", productName: "Cowbelle Milk 2272g", amountGrams: 2272, costGBP: 1.45 },
+        { itemType: "bananas", productName: "Nature's Pick Bananas 600g", amountGrams: 600, costGBP: 0.75 },
+      ],
     },
     {
-      name: "Cathedral City Cheddar 400g",
-      cheapestItemName: "Valley Spire Mature 400g",
-      category: "Meat & Dairy",
-      currentPriceGBP: 3.6,
-      cheapestPriceGBP: 2.35,
-      cheapestStore: "Lidl (0.3 mi)",
+      name: "Asda Superstore (Hulme)",
+      latitude: 53.4642,
+      longitude: -2.2508,
+      products: [
+        { itemType: "butter", productName: "Asda Spreadable 500g", amountGrams: 500, costGBP: 2.75 },
+        { itemType: "beef mince", productName: "Asda Beef Mince 500g", amountGrams: 500, costGBP: 2.85 },
+        { itemType: "cheddar", productName: "Asda Extra Mature 400g", amountGrams: 400, costGBP: 2.70 },
+        { itemType: "crisps", productName: "Asda Crisps 150g", amountGrams: 150, costGBP: 1.35 },
+        { itemType: "milk", productName: "Asda Milk 2272g", amountGrams: 2272, costGBP: 1.45 },
+        { itemType: "bananas", productName: "Asda Bananas 600g", amountGrams: 600, costGBP: 0.85 },
+      ],
     },
     {
-      name: "Walkers Crisps 6pk",
-      cheapestItemName: "Snackrite Crisps 6pk",
-      category: "Snacks & Drinks",
-      currentPriceGBP: 2.1,
-      cheapestPriceGBP: 1.15,
-      cheapestStore: "Lidl (0.3 mi)",
+      name: "Sainsbury's Local (Oxford Rd)",
+      latitude: 53.4701,
+      longitude: -2.2369,
+      products: [
+        { itemType: "butter", productName: "Country Life Spreadable 400g", amountGrams: 400, costGBP: 3.95 },
+        { itemType: "beef mince", productName: "Sainsbury's Beef Mince 500g", amountGrams: 500, costGBP: 3.60 },
+        { itemType: "cheddar", productName: "Sainsbury's Cheddar 400g", amountGrams: 400, costGBP: 3.40 },
+        { itemType: "crisps", productName: "Walkers 6pk 150g", amountGrams: 150, costGBP: 2.00 },
+        { itemType: "milk", productName: "Sainsbury's Milk 2272g", amountGrams: 2272, costGBP: 1.50 },
+        { itemType: "bananas", productName: "Fairtrade Bananas 600g", amountGrams: 600, costGBP: 1.05 },
+      ],
     },
     {
-      name: "Semi-Skimmed Milk 4pt",
-      cheapestItemName: "British Milk 4 Pints",
-      category: "Meat & Dairy",
-      currentPriceGBP: 1.55,
-      cheapestPriceGBP: 1.45,
-      cheapestStore: "Lidl (0.3 mi)",
-    },
-    {
-      name: "Fairtrade Bananas 5pk",
-      cheapestItemName: "Bananas 5 Pack",
-      category: "Produce",
-      currentPriceGBP: 1.1,
-      cheapestPriceGBP: 0.78,
-      cheapestStore: "Aldi (0.7 mi)",
-    },
-  ],
-  smartSwaps: [
-    {
-      originalItem: "Lurpak Spreadable 400g at Tesco Express (£4.25)",
-      betterDealSuggestion: "Danepak / Nordpak Spreadable 500g at Lidl (£2.15)",
-      targetStore: "Lidl Oxford Rd • 0.3 miles (6 min walk)",
-      moneySavedGBP: 2.1,
-      reason: "Convenience stores charge a 97% premium on branded butter compared to Lidl 300m down Oxford Road.",
-    },
-    {
-      originalItem: "Cathedral City Cheddar 400g (£3.60) + Crisps 6pk (£2.10)",
-      betterDealSuggestion: "Valley Spire Mature Cheddar 400g (£2.35) + Snackrite 6pk (£1.15)",
-      targetStore: "Lidl Oxford Rd • 0.3 miles (6 min walk)",
-      moneySavedGBP: 2.2,
-      reason: "Switching to discounter own-label dairy & snacks cuts £2.20 instantly with identical weight.",
-    },
-    {
-      originalItem: "Beef Steak Mince 500g at Tesco Express (£3.75)",
-      betterDealSuggestion: "British 5% Lean Beef Mince 500g at Lidl/Aldi (£2.49)",
-      targetStore: "Lidl Oxford Rd • 0.3 miles (6 min walk)",
-      moneySavedGBP: 1.26,
-      reason: "Tesco Express adds a convenience store markup versus standard supermarket and discounter pricing.",
+      name: "Tesco Express (Current)",
+      latitude: 53.4682,
+      longitude: -2.2351,
+      products: [
+        { itemType: "butter", productName: "Lurpak Butter 400g", amountGrams: 400, costGBP: 4.25 },
+        { itemType: "beef mince", productName: "Beef Steak Mince 500g", amountGrams: 500, costGBP: 3.75 },
+        { itemType: "cheddar", productName: "Cathedral City Cheddar 400g", amountGrams: 400, costGBP: 3.60 },
+        { itemType: "crisps", productName: "Walkers Crisps 150g", amountGrams: 150, costGBP: 2.10 },
+        { itemType: "milk", productName: "Semi-Skimmed Milk 2272g", amountGrams: 2272, costGBP: 1.55 },
+        { itemType: "bananas", productName: "Fairtrade Bananas 600g", amountGrams: 600, costGBP: 1.10 },
+      ],
     },
   ],
 };
 
 export default function BasketScoutPage() {
-  const [data, setData] = useState<BasketComparisonData>(INITIAL_DATA);
+  const [payload, setPayload] = useState<ExtractedPayload>(INITIAL_PAYLOAD);
   const [postcode, setPostcode] = useState("M13 9PL");
+  const [maxDistanceKm, setMaxDistanceKm] = useState<number>(2.0); // Live slider parameter for teammate's function!
   const [textList, setTextList] = useState("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const [selectedItemIndices, setSelectedItemIndices] = useState<number[]>(
-    INITIAL_DATA.items.map((_, i) => i)
+    INITIAL_PAYLOAD.requirements.map((_, i) => i)
   );
   const [activeStoreIdx, setActiveStoreIdx] = useState<number>(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -235,7 +161,49 @@ export default function BasketScoutPage() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
 
-  // Render & update the interactive Leaflet Map whenever data or activeStoreIdx changes
+  // =========================================================================
+  // RUN TEAMMATE'S HAVERSINE & UNIT-PRICE ENGINE IN REAL TIME!
+  // =========================================================================
+  const rankedShops = rankAllShops(
+    payload.shops,
+    payload.requirements,
+    payload.userLatitude,
+    payload.userLongitude,
+    maxDistanceKm
+  );
+
+  const cheapestWinner = findCheapestShop(
+    payload.shops,
+    payload.requirements,
+    payload.userLatitude,
+    payload.userLongitude,
+    maxDistanceKm
+  );
+
+  const activeShop = rankedShops[activeStoreIdx] || cheapestWinner || rankedShops[0];
+
+  const originalItemsTotal = payload.requirements.reduce(
+    (sum, req) => sum + req.paidPriceGBP,
+    0
+  );
+
+  // Calculate live side-by-side receipt total using teammate's unit-price breakdown
+  const optimizedItemsTotal = payload.requirements.reduce((sum, req, idx) => {
+    const isChecked = selectedItemIndices.includes(idx);
+    const matchedBreakdown = activeShop?.breakdown.find(
+      (b) => b.itemType.toLowerCase() === req.itemType.toLowerCase()
+    );
+    const cheaperCost = matchedBreakdown ? matchedBreakdown.costGBP : req.paidPriceGBP;
+    return sum + (isChecked ? cheaperCost : req.paidPriceGBP);
+  }, 0);
+
+  const totalReceiptSavings = Math.max(0, originalItemsTotal - optimizedItemsTotal);
+  const savingsPercentage =
+    originalItemsTotal > 0
+      ? Math.round((totalReceiptSavings / originalItemsTotal) * 100)
+      : 0;
+
+  // Render & update Leaflet Map with maxDistanceKm radius circle
   useEffect(() => {
     let retryTimer: any;
 
@@ -251,21 +219,34 @@ export default function BasketScoutPage() {
         mapInstanceRef.current = null;
       }
 
-      const userLat = data.userLat || 53.4668;
-      const userLng = data.userLng || -2.2339;
+      const userLat = payload.userLatitude || 53.4668;
+      const userLng = payload.userLongitude || -2.2339;
 
       const map = L.map(mapContainerRef.current).setView([userLat, userLng], 14);
       mapInstanceRef.current = map;
 
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      L.tileLayer(
+        "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+        {
+          attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        }
+      ).addTo(map);
+
+      // Draw Max Walking Distance Circle from teammate's maxDistanceKm filter
+      L.circle([userLat, userLng], {
+        radius: maxDistanceKm * 1000,
+        color: "#2563eb",
+        fillColor: "#3b82f6",
+        fillOpacity: 0.06,
+        weight: 1.5,
+        dashArray: "4, 6",
       }).addTo(map);
 
-      // 1. Add User Location Marker (Pulsing Blue Badge)
       const userIcon = L.divIcon({
         className: "",
         html: `<div style="background:#1e3a8a;color:#fff;padding:4px 10px;border-radius:999px;font-weight:800;font-size:11px;border:2px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,0.25);white-space:nowrap;">
-          📍 You (${data.userPostcode.split(" ")[0] || "M13"})
+          📍 You (${payload.userPostcode.split(" ")[0] || "M13"})
         </div>`,
         iconSize: [90, 26],
         iconAnchor: [45, 13],
@@ -274,41 +255,39 @@ export default function BasketScoutPage() {
 
       const bounds: [number, number][] = [[userLat, userLng]];
 
-      // 2. Add Each Supermarket Marker + Walking Route Line
-      data.storeComparisons.forEach((store, idx) => {
-        const sLat = store.lat || userLat + (idx - 2) * 0.003;
-        const sLng = store.lng || userLng + (idx - 2) * 0.004;
-        bounds.push([sLat, sLng]);
+      rankedShops.forEach((store, idx) => {
+        bounds.push([store.latitude, store.longitude]);
 
         const isCheapest = idx === 0;
         const isSelected = idx === activeStoreIdx;
-        const isCurrent = store.savingsVsCurrentGBP === 0;
+        const saved = Math.max(0, originalItemsTotal - store.totalCostGBP);
 
-        const bg = isCheapest ? "#059669" : isCurrent ? "#dc2626" : "#2563eb";
+        const bg = isCheapest ? "#059669" : saved === 0 ? "#dc2626" : "#2563eb";
         const scale = isSelected ? "transform:scale(1.1);z-index:999;" : "";
 
         const storeIcon = L.divIcon({
           className: "",
           html: `<div style="background:${bg};color:#fff;padding:5px 9px;border-radius:10px;font-family:monospace;font-weight:800;font-size:11px;border:2px solid #fff;box-shadow:0 4px 12px rgba(0,0,0,0.22);white-space:nowrap;${scale}">
-            ${store.storeName.split("(")[0].trim()} • £${store.totalBasketGBP.toFixed(2)}
+            ${store.shopName.split("(")[0].trim()} • £${store.totalCostGBP.toFixed(2)}
             <div style="font-size:9px;font-family:sans-serif;font-weight:600;opacity:0.95;">
-              🚶 ${store.walkMinutes}m (${store.distanceMiles} mi) ${
-            store.savingsVsCurrentGBP > 0 ? `• Save £${store.savingsVsCurrentGBP.toFixed(2)}` : "• Paid"
+              🚶 ${store.distanceKm} km (${store.walkMinutes}m) ${
+            saved > 0 ? `• Save £${saved.toFixed(2)}` : "• Current"
           }
             </div>
           </div>`,
-          iconSize: [140, 40],
-          iconAnchor: [70, 20],
+          iconSize: [145, 40],
+          iconAnchor: [72, 20],
         });
 
-        const marker = L.marker([sLat, sLng], { icon: storeIcon }).addTo(map);
+        const marker = L.marker([store.latitude, store.longitude], {
+          icon: storeIcon,
+        }).addTo(map);
         marker.on("click", () => setActiveStoreIdx(idx));
 
-        // Draw dashed walking route line from User to each Supermarket
         L.polyline(
           [
             [userLat, userLng],
-            [sLat, sLng],
+            [store.latitude, store.longitude],
           ],
           {
             color: isSelected ? "#059669" : "#94a3b8",
@@ -333,7 +312,7 @@ export default function BasketScoutPage() {
         mapInstanceRef.current = null;
       }
     };
-  }, [data, activeStoreIdx]);
+  }, [payload, maxDistanceKm, activeStoreIdx]);
 
   const compressImageToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -393,8 +372,10 @@ export default function BasketScoutPage() {
 
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Failed to compare prices");
-      setData(result);
-      setSelectedItemIndices((result.items || []).map((_: any, i: number) => i));
+      setPayload(result);
+      setSelectedItemIndices(
+        (result.requirements || []).map((_: any, i: number) => i)
+      );
       setActiveStoreIdx(0);
     } catch (err: any) {
       setError(err.message || "Error comparing grocery basket.");
@@ -409,29 +390,22 @@ export default function BasketScoutPage() {
     );
   };
 
-  const originalItemsTotal = data.items.reduce((sum, item) => sum + item.currentPriceGBP, 0);
-
-  const optimizedItemsTotal = data.items.reduce((sum, item, idx) => {
-    const useCheaper = selectedItemIndices.includes(idx);
-    return sum + (useCheaper ? item.cheapestPriceGBP : item.currentPriceGBP);
-  }, 0);
-
-  const totalReceiptSavings = Math.max(0, originalItemsTotal - optimizedItemsTotal);
-  const savingsPercentage =
-    originalItemsTotal > 0 ? Math.round((totalReceiptSavings / originalItemsTotal) * 100) : 0;
-
   const generateShoppingListText = () => {
+    if (!activeShop) return "No qualifying shop within distance.";
     const lines = [
-      `🧾 *BasketScout Side-by-Side Receipt Savings (${postcode})*`,
-      `📍 Switch From: ${data.detectedStore} (£${originalItemsTotal.toFixed(2)})`,
-      `🏆 Switch To: *${data.cheapestStoreName}* (£${optimizedItemsTotal.toFixed(2)})`,
+      `🧾 *BasketScout Unit-Price & Haversine Optimizer (${postcode})*`,
+      `📍 Switch From: ${payload.detectedStore} (£${originalItemsTotal.toFixed(2)})`,
+      `🏆 Switch To: *${activeShop.shopName}* (${activeShop.distanceKm} km away • £${optimizedItemsTotal.toFixed(2)})`,
       `💰 *Total Saved: £${totalReceiptSavings.toFixed(2)} (-${savingsPercentage}%)* | £${(totalReceiptSavings * 52).toFixed(0)}/yr`,
       ``,
-      `🛒 *Cheaper Receipt Line-by-Line:*`,
-      ...data.items.map((item, idx) => {
-        const saved = Math.max(0, item.currentPriceGBP - item.cheapestPriceGBP);
-        const targetName = item.cheapestItemName || item.name;
-        return `${idx + 1}. ${targetName} @ ${item.cheapestStore}: *£${item.cheapestPriceGBP.toFixed(2)}* (was £${item.currentPriceGBP.toFixed(2)}, save £${saved.toFixed(2)})`;
+      `🛒 *Unit-Price Normalized Breakdown:*`,
+      ...payload.requirements.map((req, idx) => {
+        const match = activeShop.breakdown.find(
+          (b) => b.itemType.toLowerCase() === req.itemType.toLowerCase()
+        );
+        const newCost = match ? match.costGBP : req.paidPriceGBP;
+        const saved = Math.max(0, req.paidPriceGBP - newCost);
+        return `${idx + 1}. ${match?.productName || req.originalName} (${req.amountGrams}g): *£${newCost.toFixed(2)}* (was £${req.paidPriceGBP.toFixed(2)}, save £${saved.toFixed(2)})`;
       }),
     ];
     return lines.join("\n");
@@ -456,7 +430,7 @@ export default function BasketScoutPage() {
               BasketScout UK
             </h1>
             <p className="text-xs text-slate-500">
-              Side-by-Side Receipt Price Optimizer & Live Supermarket Distance Map
+              Haversine Distance & Unit-Price (£/g) Supermarket Receipt Optimizer
             </p>
           </div>
         </div>
@@ -464,7 +438,7 @@ export default function BasketScoutPage() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5 text-xs font-semibold bg-blue-50 text-blue-800 px-3 py-2 rounded-full border border-blue-200">
             <MapPin className="w-3.5 h-3.5 text-blue-600" />
-            <span>Scanned: {data.detectedStore}</span>
+            <span>Scanned: {payload.detectedStore}</span>
           </div>
           <button
             onClick={() => setIsModalOpen(true)}
@@ -477,13 +451,13 @@ export default function BasketScoutPage() {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* LEFT COLUMN: Postcode + Receipt Upload + Sample Pills (4 cols) */}
+        {/* LEFT COLUMN: Postcode + Max Distance Slider + Receipt Upload (4 cols) */}
         <section className="lg:col-span-4 space-y-6">
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <div className="mb-4">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mb-1.5">
                 <Navigation className="w-3.5 h-3.5 text-blue-600" />
-                Your Location / Postcode (For Map Distance)
+                Your Location / Postcode
               </label>
               <input
                 type="text"
@@ -492,6 +466,36 @@ export default function BasketScoutPage() {
                 placeholder="e.g., M13 9PL or Fallowfield"
                 className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600"
               />
+            </div>
+
+            {/* LIVE HAVERSINE DISTANCE SLIDER POWERED BY TEAMMATE'S FUNCTION */}
+            <div className="mb-5 p-3.5 bg-blue-50/70 rounded-xl border border-blue-200">
+              <div className="flex items-center justify-between text-xs font-bold text-blue-950 mb-1.5">
+                <span className="flex items-center gap-1.5">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600" />
+                  Max Walking Radius
+                </span>
+                <span className="font-mono bg-blue-600 text-white px-2 py-0.5 rounded-md">
+                  {maxDistanceKm.toFixed(1)} km
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0.3}
+                max={3.0}
+                step={0.1}
+                value={maxDistanceKm}
+                onChange={(e) => {
+                  setMaxDistanceKm(parseFloat(e.target.value));
+                  setActiveStoreIdx(0);
+                }}
+                className="w-full accent-blue-600 cursor-pointer"
+              />
+              <div className="flex justify-between text-[10px] text-slate-500 font-mono mt-1">
+                <span>0.3 km (4m walk)</span>
+                <span>{rankedShops.length} shops in range</span>
+                <span>3.0 km</span>
+              </div>
             </div>
 
             <h2 className="text-base font-bold mb-3 flex items-center gap-2">
@@ -531,7 +535,7 @@ export default function BasketScoutPage() {
                     Upload Supermarket Receipt (JPG/PNG)
                   </p>
                   <p className="text-xs text-slate-500">
-                    Maps cheapest nearby shops & side-by-side receipt
+                    Extracts weights (g) & runs unit-price solver
                   </p>
                 </div>
               )}
@@ -564,7 +568,7 @@ export default function BasketScoutPage() {
             <textarea
               value={textList}
               onChange={(e) => setTextList(e.target.value)}
-              placeholder="Or paste/type a shopping list (e.g., Beef mince £3.75, Cheddar £3.60, Lurpak £4.25)..."
+              placeholder="Or paste/type a shopping list (e.g., Beef mince 500g £3.75, Cheddar 400g £3.60)..."
               rows={3}
               className="w-full p-3 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-blue-600 mb-4"
             />
@@ -581,7 +585,7 @@ export default function BasketScoutPage() {
               className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition cursor-pointer"
             >
               <Sparkles className="w-4 h-4" />
-              {loading ? "Mapping Nearby Supermarkets..." : "Compare Receipt & Map Shops"}
+              {loading ? "Running Unit-Price Solver..." : "Find Cheapest Shop in Range"}
             </button>
           </div>
         </section>
@@ -599,33 +603,33 @@ export default function BasketScoutPage() {
                 £{originalItemsTotal.toFixed(2)}
               </div>
               <div className="text-[11px] text-slate-400 truncate">
-                {data.detectedStore}
+                {payload.detectedStore}
               </div>
             </div>
 
             <div className="bg-white p-4 rounded-2xl border border-emerald-300 shadow-sm">
               <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                <span>Optimized Receipt</span>
+                <span>Cheapest in Range</span>
                 <ShoppingBag className="w-4 h-4 text-emerald-600" />
               </div>
               <div className="text-2xl font-extrabold text-emerald-600 font-mono">
                 £{optimizedItemsTotal.toFixed(2)}
               </div>
               <div className="text-[11px] font-semibold text-emerald-700 truncate">
-                {data.cheapestStoreName}
+                {activeShop ? `${activeShop.shopName} (${activeShop.distanceKm} km)` : "Increase radius"}
               </div>
             </div>
 
             <div className="bg-emerald-900 text-white p-4 rounded-2xl shadow-sm">
               <div className="flex items-center justify-between text-xs text-emerald-200 mb-1">
-                <span>Instant Savings</span>
+                <span>Unit-Price Saving</span>
                 <TrendingDown className="w-4 h-4 text-emerald-300" />
               </div>
               <div className="text-2xl font-extrabold text-emerald-300 font-mono">
                 -£{totalReceiptSavings.toFixed(2)}
               </div>
               <div className="text-[11px] text-emerald-200">
-                Save {savingsPercentage}% on this shop!
+                Save {savingsPercentage}% on equal weight (g)
               </div>
             </div>
 
@@ -638,34 +642,34 @@ export default function BasketScoutPage() {
                 £{(totalReceiptSavings * 52).toFixed(0)}/yr
               </div>
               <div className="text-[11px] text-blue-200 truncate">
-                {data.storeComparisons[0]?.walkMinutes || 6} min walk ({data.storeComparisons[0]?.distanceMiles || 0.3} mi)
+                {activeShop ? `${activeShop.walkMinutes} min walk (${activeShop.distanceKm} km)` : "No shop in range"}
               </div>
             </div>
           </div>
 
-          {/* SIDE-BY-SIDE ORIGINAL RECEIPT VS. SAVED RECEIPT COMPARISON */}
+          {/* SIDE-BY-SIDE ORIGINAL RECEIPT VS. UNIT-PRICE OPTIMIZED RECEIPT */}
           <div className="bg-slate-100 p-5 rounded-2xl border border-slate-200 shadow-inner">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
               <div>
                 <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
                   <Receipt className="w-5 h-5 text-blue-600" />
-                  Side-by-Side Receipt Comparison
+                  Side-by-Side Receipt Comparison (Normalized by Weight in Grams)
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Left: What you paid • Right: Exact item-by-item savings at nearby supermarkets (click any item on the right to toggle)
+                  Powered by <code className="font-mono bg-white px-1.5 py-0.5 rounded border">findCheapestShop.ts</code> unit-price per gram calculator
                 </p>
               </div>
               <button
                 onClick={() =>
                   setSelectedItemIndices(
-                    selectedItemIndices.length === data.items.length
+                    selectedItemIndices.length === payload.requirements.length
                       ? []
-                      : data.items.map((_, i) => i)
+                      : payload.requirements.map((_, i) => i)
                   )
                 }
                 className="text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-lg transition cursor-pointer shadow-2xs"
               >
-                {selectedItemIndices.length === data.items.length
+                {selectedItemIndices.length === payload.requirements.length
                   ? "Uncheck All Items"
                   : "Select All Savings"}
               </button>
@@ -682,27 +686,30 @@ export default function BasketScoutPage() {
                       Original Receipt (What You Paid)
                     </span>
                     <h4 className="text-sm font-extrabold text-slate-900 uppercase">
-                      {data.detectedStore}
+                      {payload.detectedStore}
                     </h4>
                     <p className="text-[11px] text-slate-400">
-                      Area: {data.userPostcode} • Convenience Pricing
+                      Area: {payload.userPostcode}
                     </p>
                   </div>
 
                   <div className="divide-y divide-dashed divide-slate-200">
-                    {data.items.map((item, idx) => (
+                    {payload.requirements.map((req, idx) => (
                       <div
                         key={idx}
-                        className="py-2.5 flex items-center justify-between gap-2 min-h-[56px]"
+                        className="py-2.5 flex items-center justify-between gap-2 min-h-[58px]"
                       >
                         <div>
-                          <p className="text-xs font-bold text-slate-800">{item.name}</p>
+                          <p className="text-xs font-bold text-slate-800">
+                            {req.originalName}
+                          </p>
                           <span className="text-[10px] text-slate-400 font-sans">
-                            {item.category}
+                            Required: {req.amountGrams}g • £
+                            {((req.paidPriceGBP / req.amountGrams) * 100).toFixed(2)}/100g
                           </span>
                         </div>
                         <span className="text-sm font-bold text-slate-900 tabular-nums">
-                          £{item.currentPriceGBP.toFixed(2)}
+                          £{req.paidPriceGBP.toFixed(2)}
                         </span>
                       </div>
                     ))}
@@ -712,7 +719,7 @@ export default function BasketScoutPage() {
                 <div className="bg-slate-50 p-4 border-t-2 border-dashed border-slate-300 font-mono">
                   <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
                     <span>ITEMS COUNT</span>
-                    <span>{data.items.length}</span>
+                    <span>{payload.requirements.length}</span>
                   </div>
                   <div className="flex items-center justify-between text-base font-extrabold text-slate-900">
                     <span>TOTAL PAID</span>
@@ -721,33 +728,42 @@ export default function BasketScoutPage() {
                 </div>
               </div>
 
-              {/* RIGHT RECEIPT: OPTIMIZED CHEAPER RECEIPT */}
+              {/* RIGHT RECEIPT: TEAMMATE ENGINE OPTIMIZED RECEIPT */}
               <div className="bg-white rounded-xl border-2 border-emerald-500 shadow-md overflow-hidden flex flex-col justify-between relative">
                 <div className="h-2 bg-emerald-500" />
 
                 <div className="p-5 font-mono">
                   <div className="text-center border-b-2 border-dashed border-emerald-200 pb-3 mb-4">
                     <span className="inline-block text-[10px] font-sans font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full mb-1">
-                      Smart Saver Receipt (Save £{totalReceiptSavings.toFixed(2)})
+                      Unit-Price Optimized (Save £{totalReceiptSavings.toFixed(2)})
                     </span>
                     <h4 className="text-sm font-extrabold text-emerald-950 uppercase">
-                      {data.cheapestStoreName}
+                      {activeShop ? activeShop.shopName : "No Shop in Radius"}
                     </h4>
                     <p className="text-[11px] text-emerald-700 font-sans font-medium">
-                      📍 {data.storeComparisons[0]?.distanceMiles || 0.3} mi away ({data.storeComparisons[0]?.walkMinutes || 6} min walk)
+                      {activeShop
+                        ? `📍 ${activeShop.distanceKm} km away (${activeShop.walkMinutes} min walk)`
+                        : "Drag the Max Walking Radius slider left/right"}
                     </p>
                   </div>
 
                   <div className="divide-y divide-dashed divide-emerald-100">
-                    {data.items.map((item, idx) => {
+                    {payload.requirements.map((req, idx) => {
                       const isSelected = selectedItemIndices.includes(idx);
-                      const itemSaving = Math.max(0, item.currentPriceGBP - item.cheapestPriceGBP);
+                      const matched = activeShop?.breakdown.find(
+                        (b) => b.itemType.toLowerCase() === req.itemType.toLowerCase()
+                      );
+                      const cheaperPrice = matched ? matched.costGBP : req.paidPriceGBP;
+                      const itemSaving = Math.max(0, req.paidPriceGBP - cheaperPrice);
+
                       return (
                         <div
                           key={idx}
                           onClick={() => toggleReceiptItem(idx)}
-                          className={`py-2 px-2 -mx-2 rounded-lg transition cursor-pointer flex items-center justify-between gap-2 min-h-[56px] ${
-                            isSelected ? "bg-emerald-50/70 hover:bg-emerald-100/60" : "opacity-50 hover:opacity-80"
+                          className={`py-2 px-2 -mx-2 rounded-lg transition cursor-pointer flex items-center justify-between gap-2 min-h-[58px] ${
+                            isSelected
+                              ? "bg-emerald-50/70 hover:bg-emerald-100/60"
+                              : "opacity-50 hover:opacity-80"
                           }`}
                         >
                           <div className="flex items-start gap-2 min-w-0">
@@ -762,11 +778,11 @@ export default function BasketScoutPage() {
                             </div>
                             <div className="truncate">
                               <p className="text-xs font-bold text-emerald-950 truncate">
-                                {item.cheapestItemName || item.name}
+                                {matched?.productName || req.originalName}
                               </p>
                               <div className="flex items-center gap-1.5 text-[10px] font-sans">
                                 <span className="text-emerald-700 font-semibold">
-                                  @{item.cheapestStore}
+                                  {req.amountGrams}g (£{matched?.unitPricePer100g.toFixed(2)}/100g)
                                 </span>
                                 {itemSaving > 0 && (
                                   <span className="bg-emerald-600 text-white px-1.5 py-0.2 rounded-sm font-bold">
@@ -779,11 +795,11 @@ export default function BasketScoutPage() {
 
                           <div className="text-right shrink-0">
                             <span className="text-sm font-extrabold text-emerald-700 tabular-nums block">
-                              £{(isSelected ? item.cheapestPriceGBP : item.currentPriceGBP).toFixed(2)}
+                              £{(isSelected ? cheaperPrice : req.paidPriceGBP).toFixed(2)}
                             </span>
                             {isSelected && itemSaving > 0 && (
                               <span className="text-[10px] line-through text-slate-400 block">
-                                £{item.currentPriceGBP.toFixed(2)}
+                                £{req.paidPriceGBP.toFixed(2)}
                               </span>
                             )}
                           </div>
@@ -800,45 +816,34 @@ export default function BasketScoutPage() {
                   </div>
                   <div className="flex items-center justify-between text-base font-extrabold text-white">
                     <span>NEW TOTAL</span>
-                    <span className="text-emerald-400">£{optimizedItemsTotal.toFixed(2)}</span>
+                    <span className="text-emerald-400">
+                      £{optimizedItemsTotal.toFixed(2)}
+                    </span>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* ===================================================================== */}
-          {/* NEW: LIVE INTERACTIVE SUPERMARKET DISTANCE & BASKET PRICE MAP         */}
-          {/* ===================================================================== */}
+          {/* LIVE INTERACTIVE HAVERSINE SUPERMARKET MAP */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <Compass className="w-5 h-5 text-blue-600" />
-                  Live Supermarket Distance & Basket Price Map ({data.userPostcode})
+                  Shops Within {maxDistanceKm.toFixed(1)} km Radius ({rankedShops.length} Qualifying)
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Click any supermarket card below to highlight its walking route and price pin on the map
+                  Click any shop below to inspect its unit-price receipt above and highlight its route on the map
                 </p>
-              </div>
-              <div className="flex items-center gap-3 text-xs font-semibold">
-                <span className="flex items-center gap-1 text-emerald-700">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block" /> Cheapest
-                </span>
-                <span className="flex items-center gap-1 text-blue-700">
-                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block" /> Alternative
-                </span>
-                <span className="flex items-center gap-1 text-red-700">
-                  <span className="w-2.5 h-2.5 rounded-full bg-red-600 inline-block" /> Current
-                </span>
               </div>
             </div>
 
-            {/* Clickable Store Distance Selector Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-              {data.storeComparisons.map((store, idx) => {
+              {rankedShops.map((store, idx) => {
                 const isCheapest = idx === 0;
                 const isSelected = idx === activeStoreIdx;
+                const saved = Math.max(0, originalItemsTotal - store.totalCostGBP);
                 return (
                   <div
                     key={idx}
@@ -859,22 +864,22 @@ export default function BasketScoutPage() {
                             : "bg-slate-200 text-slate-700"
                         }`}
                       >
-                        {store.tag}
+                        {isCheapest ? "Cheapest in Radius" : `Rank #${idx + 1}`}
                       </span>
                       <h4 className="text-xs font-bold text-slate-900 leading-snug">
-                        {store.storeName}
+                        {store.shopName}
                       </h4>
                       <p className="text-[11px] text-slate-600 font-medium mt-0.5">
-                        🚶 {store.walkMinutes} min walk ({store.distanceMiles} mi)
+                        🚶 {store.distanceKm} km ({store.walkMinutes}m walk)
                       </p>
                     </div>
                     <div className="mt-3 pt-2 border-t border-slate-200/80 flex items-baseline justify-between">
                       <span className="text-base font-extrabold text-slate-900 font-mono">
-                        £{store.totalBasketGBP.toFixed(2)}
+                        £{store.totalCostGBP.toFixed(2)}
                       </span>
-                      {store.savingsVsCurrentGBP > 0 ? (
+                      {saved > 0 ? (
                         <span className="text-[11px] font-bold text-emerald-700">
-                          -£{store.savingsVsCurrentGBP.toFixed(2)}
+                          -£{saved.toFixed(2)}
                         </span>
                       ) : (
                         <span className="text-[10px] text-slate-400">Paid</span>
@@ -885,7 +890,6 @@ export default function BasketScoutPage() {
               })}
             </div>
 
-            {/* Interactive Leaflet Street Map Container */}
             <div className="relative rounded-xl overflow-hidden border border-slate-300 shadow-inner">
               <div ref={mapContainerRef} className="h-96 w-full z-0" />
             </div>
@@ -913,7 +917,7 @@ export default function BasketScoutPage() {
             </div>
 
             <p className="text-xs text-slate-600">
-              Ready to paste into WhatsApp, Telegram, or Notes before walking to the supermarket:
+              Calculated by <code className="font-mono">findCheapestShop.ts</code> (Haversine distance + £/gram normalization):
             </p>
 
             <pre className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs text-slate-800 whitespace-pre-wrap font-sans leading-relaxed max-h-64 overflow-y-auto">

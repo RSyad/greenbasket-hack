@@ -2,6 +2,7 @@
 
 export interface Product {
   itemType: string;
+  productName?: string; // Optional specific brand/item name for the receipt UI
   amountGrams: number;
   costGBP: number;
 }
@@ -15,20 +16,37 @@ export interface Shop {
 
 export interface ShoppingRequirement {
   itemType: string;
+  originalName?: string;
   amountGrams: number;
+  paidPriceGBP?: number;
 }
 
-function calculateDistance(
+export interface RankedShopResult {
+  shopName: string;
+  latitude: number;
+  longitude: number;
+  distanceKm: number;
+  distanceMiles: number;
+  walkMinutes: number;
+  totalCostGBP: number;
+  breakdown: {
+    itemType: string;
+    productName: string;
+    amountGrams: number;
+    costGBP: number;
+    unitPricePer100g: number;
+  }[];
+}
+
+export function calculateDistance(
   lat1: number,
   lon1: number,
   lat2: number,
   lon2: number
 ): number {
-
   const R = 6371; // Earth's radius in km
 
-  const toRad = (degrees: number) =>
-    degrees * (Math.PI / 180);
+  const toRad = (degrees: number) => degrees * (Math.PI / 180);
 
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
@@ -36,29 +54,26 @@ function calculateDistance(
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) *
-    Math.cos(toRad(lat2)) *
-    Math.sin(dLon / 2) ** 2;
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) ** 2;
 
-  const c = 2 * Math.atan2(
-    Math.sqrt(a),
-    Math.sqrt(1 - a)
-  );
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
   return R * c;
 }
 
-export function findCheapestShop(
+// Returns all qualifying shops sorted from cheapest to most expensive
+export function rankAllShops(
   shops: Shop[],
   requirements: ShoppingRequirement[],
   userLatitude: number,
   userLongitude: number,
   maxDistanceKm: number
-) {
-  const results = [];
+): RankedShopResult[] {
+  const results: RankedShopResult[] = [];
 
   for (const shop of shops) {
-
-    // Calculate distance from user
+    // Calculate Haversine distance from user in km
     const distance = calculateDistance(
       userLatitude,
       userLongitude,
@@ -73,15 +88,14 @@ export function findCheapestShop(
 
     let totalCost = 0;
     let validShop = true;
-
     const breakdown = [];
 
-    // Calculate required shopping cost
+    // Calculate required shopping cost using unit-price per gram
     for (const requirement of requirements) {
-
       const matchingProducts = shop.products.filter(
-        p => p.itemType.toLowerCase() ===
-             requirement.itemType.toLowerCase()
+        (p) =>
+          p.itemType.toLowerCase().trim() ===
+          requirement.itemType.toLowerCase().trim()
       );
 
       if (matchingProducts.length === 0) {
@@ -90,95 +104,64 @@ export function findCheapestShop(
       }
 
       // Choose the cheapest price per gram
-      const cheapestProduct = matchingProducts.reduce(
-        (best, current) =>
-          current.costGBP / current.amountGrams <
-          best.costGBP / best.amountGrams
-            ? current
-            : best
+      const cheapestProduct = matchingProducts.reduce((best, current) =>
+        current.costGBP / current.amountGrams <
+        best.costGBP / best.amountGrams
+          ? current
+          : best
       );
 
-      const unitPrice =
-        cheapestProduct.costGBP /
-        cheapestProduct.amountGrams;
-
-      const itemCost =
-        unitPrice * requirement.amountGrams;
+      const unitPrice = cheapestProduct.costGBP / cheapestProduct.amountGrams;
+      const itemCost = unitPrice * requirement.amountGrams;
 
       totalCost += itemCost;
 
       breakdown.push({
         itemType: requirement.itemType,
+        productName: cheapestProduct.productName || cheapestProduct.itemType,
         amountGrams: requirement.amountGrams,
-        costGBP: itemCost
+        costGBP: Number(itemCost.toFixed(2)),
+        unitPricePer100g: Number((unitPrice * 100).toFixed(2)),
       });
     }
 
     if (validShop) {
+      const distanceKm = Number(distance.toFixed(2));
+      const distanceMiles = Number((distance * 0.621371).toFixed(2));
+      const walkMinutes = Math.max(1, Math.round(distance * 12)); // ~12 mins per km walking
+
       results.push({
         shopName: shop.name,
-        distanceKm: distance,
-        totalCostGBP: totalCost,
-        breakdown
+        latitude: shop.latitude,
+        longitude: shop.longitude,
+        distanceKm,
+        distanceMiles,
+        walkMinutes,
+        totalCostGBP: Number(totalCost.toFixed(2)),
+        breakdown,
       });
     }
   }
 
   // Sort from cheapest to most expensive
-  results.sort(
-    (a, b) => a.totalCostGBP - b.totalCostGBP
-  );
+  results.sort((a, b) => a.totalCostGBP - b.totalCostGBP);
 
-  // Return cheapest shop, or null if none qualify
-  return results.length > 0 ? results[0] : null;
+  return results;
 }
 
-// Unit test
-
-const shops: Shop[] = [
-  {
-    name: "Tesco",
-    latitude: 52.4862,
-    longitude: -1.8904,
-    products: [
-      { itemType: "coffee", amountGrams: 250, costGBP: 3.50 },
-      { itemType: "milk", amountGrams: 1000, costGBP: 1.60 },
-      { itemType: "cereal", amountGrams: 500, costGBP: 2.50 }
-    ]
-  },
-  {
-    name: "Sainsbury's",
-    latitude: 52.4870,
-    longitude: -1.8950,
-    products: [
-      { itemType: "coffee", amountGrams: 250, costGBP: 3.00 },
-      { itemType: "milk", amountGrams: 1000, costGBP: 1.70 },
-      { itemType: "cereal", amountGrams: 500, costGBP: 2.20 }
-    ]
-  },
-  {
-    name: "Aldi",
-    latitude: 52.4900,
-    longitude: -1.8800,
-    products: [
-      { itemType: "coffee", amountGrams: 250, costGBP: 2.50 },
-      { itemType: "milk", amountGrams: 1000, costGBP: 1.50 }
-    ]
-  }
-];
-
-const requirements: ShoppingRequirement[] = [
-  { itemType: "coffee", amountGrams: 250 },
-  { itemType: "milk", amountGrams: 1000 },
-  { itemType: "cereal", amountGrams: 500 }
-];
-
-const cheapest = findCheapestShop(
-  shops,
-  requirements,
-  52.4862,  // User latitude
-  -1.8904,  // User longitude
-  1.0       // Maximum distance in km
-);
-
-console.log(cheapest);
+export function findCheapestShop(
+  shops: Shop[],
+  requirements: ShoppingRequirement[],
+  userLatitude: number,
+  userLongitude: number,
+  maxDistanceKm: number
+) {
+  const results = rankAllShops(
+    shops,
+    requirements,
+    userLatitude,
+    userLongitude,
+    maxDistanceKm
+  );
+  return results.length > 0 ? results[0] : null;
+}
