@@ -349,7 +349,7 @@ export default function BasketScoutPage() {
     }
   };
 
-  const runAnalysis = async (customImage?: string | null, customText?: string) => {
+    const runAnalysis = async (customImage?: string | null, customText?: string) => {
     const imgToSend = customImage !== undefined ? customImage : imagePreview;
     const txtToSend = customText !== undefined ? customText : textList;
 
@@ -363,15 +363,18 @@ export default function BasketScoutPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          imageBase64: imgToSend,
-          mimeType: "image/jpeg",
-          textList: txtToSend,
-          postcode,
+          imageBase64: imgToSend || null,
+          textList: txtToSend.trim(),
+          postcode: postcode.trim() || "M13 9PL",
+          userLat: payload.userLatitude || 53.4668,
+          userLng: payload.userLongitude || -2.2339,
+          maxDistanceKm,
         }),
       });
 
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Failed to compare prices");
+
       setPayload(result);
       setSelectedItemIndices(
         (result.requirements || []).map((_: any, i: number) => i)
@@ -383,6 +386,7 @@ export default function BasketScoutPage() {
       setLoading(false);
     }
   };
+
 
   const toggleReceiptItem = (idx: number) => {
     setSelectedItemIndices((prev) =>
