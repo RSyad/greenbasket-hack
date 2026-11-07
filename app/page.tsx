@@ -2,14 +2,14 @@
 
 import React, { useState, useRef } from "react";
 import {
-  Leaf,
+  MapPin,
   Upload,
   Sparkles,
   TrendingDown,
   PoundSterling,
   ShoppingBag,
   ArrowRight,
-  Award,
+  Navigation,
   Zap,
   Image as ImageIcon,
   CheckCircle2,
@@ -17,6 +17,7 @@ import {
   Copy,
   X,
   ListChecks,
+  Store,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -26,99 +27,153 @@ import {
   YAxis,
   Tooltip,
   Cell,
-  PieChart,
-  Pie,
   Legend,
 } from "recharts";
+
+interface StoreComparison {
+  storeName: string;
+  totalBasketGBP: number;
+  distanceMiles: number;
+  walkMinutes: number;
+  savingsVsCurrentGBP: number;
+  tag: string;
+}
 
 interface BasketItem {
   name: string;
   category: string;
-  priceGBP: number;
-  co2Kg: number;
-  impactLevel: "High" | "Medium" | "Low";
+  currentPriceGBP: number;
+  cheapestPriceGBP: number;
+  cheapestStore: string;
 }
 
 interface SmartSwap {
   originalItem: string;
-  swapSuggestion: string;
-  co2SavedKg: number;
+  betterDealSuggestion: string;
+  targetStore: string;
   moneySavedGBP: number;
   reason: string;
 }
 
-interface GreenBasketData {
-  storeName: string;
-  ecoScore: number;
-  totalCostGBP: number;
-  totalCo2Kg: number;
+interface BasketComparisonData {
+  detectedStore: string;
+  userPostcode: string;
+  currentBasketTotalGBP: number;
+  cheapestStoreName: string;
+  cheapestBasketTotalGBP: number;
+  nearestStoreName: string;
+  nearestDistanceMiles: number;
+  storeComparisons: StoreComparison[];
   items: BasketItem[];
   smartSwaps: SmartSwap[];
 }
 
 const SAMPLE_RECEIPTS = [
   {
-    label: "🛒 Tesco Express (Meat & Dairy Heavy)",
-    text: "TESCO EXPRESS OXFORD RD MANCHESTER: British Beef Steak Mince 500g £3.50, Cathedral City Mature Cheddar 400g £3.40, Air-Freighted Peruvian Asparagus 200g £2.50, Walkers Crisps Multipack £2.00, Fairtrade Bananas 5 Pack £0.95, Semi-Skimmed Milk 4 Pints £1.45",
+    label: "🛒 Tesco Express Oxford Rd (Convenience Markup)",
+    text: "TESCO EXPRESS OXFORD RD MANCHESTER: British Beef Steak Mince 500g £3.75, Cathedral City Mature Cheddar 400g £3.60, Lurpak Spreadable Butter 400g £4.25, Walkers Crisps 6 Pack £2.10, Fairtrade Bananas 5 Pack £1.10, Semi-Skimmed Milk 4 Pints £1.55",
   },
   {
-    label: "🛍️ Aldi Student Weekly Shop",
-    text: "ALDI MANCHESTER ARNDALE: Chicken Breast Fillets 600g £4.29, Imported Strawberries 400g £2.29, Frozen Pepperoni Pizza £1.75, Tin Chopped Tomatoes 400g £0.45, Brown Lentils 500g £0.99, Instant Coffee Jar £2.49",
+    label: "🛍️ Sainsbury's Local Fallowfield (Student Essentials)",
+    text: "SAINSBURYS LOCAL FALLOWFIELD: Chicken Breast Fillets 600g £5.20, Heinz Baked Beans 4 Pack £3.75, Tropicana Orange Juice 1L £3.00, Barista Oat Milk 1L £2.15, Frozen Pepperoni Pizza £3.25, Pasta Fusilli 500g £1.35",
   },
   {
-    label: "🥗 Sainsbury's Meal Deal + Essentials",
-    text: "SAINSBURYS LOCAL: Bacon & Egg Triple Sandwich £3.50, Smoothie Bottle 250ml £2.10, Lamb Chops 400g £5.50, British Potatoes 2kg £1.35, Oat Drink 1L £1.60",
+    label: "🥖 Co-op Piccadilly (Evening Basket)",
+    text: "CO-OP MANCHESTER: Salmon Fillets 2 Pack £4.85, Ben & Jerry's Tub 465ml £5.50, Olive Oil 500ml £5.20, Free Range Eggs 6 Pack £2.10, Sourdough Loaf £2.30",
   },
 ];
 
-const INITIAL_DATA: GreenBasketData = {
-  storeName: "Tesco Express (Oxford Rd, Manchester)",
-  ecoScore: 42,
-  totalCostGBP: 13.8,
-  totalCo2Kg: 19.4,
+const INITIAL_DATA: BasketComparisonData = {
+  detectedStore: "Tesco Express (Oxford Rd, M13)",
+  userPostcode: "M13 9PL (Manchester Uni)",
+  currentBasketTotalGBP: 16.35,
+  cheapestStoreName: "Lidl (Oxford Rd • 0.3 mi)",
+  cheapestBasketTotalGBP: 10.65,
+  nearestStoreName: "Tesco Express (0.1 mi • 2 min walk)",
+  nearestDistanceMiles: 0.1,
+  storeComparisons: [
+    {
+      storeName: "Lidl (Oxford Rd)",
+      totalBasketGBP: 10.65,
+      distanceMiles: 0.3,
+      walkMinutes: 6,
+      savingsVsCurrentGBP: 5.7,
+      tag: "Cheapest & Close",
+    },
+    {
+      storeName: "Aldi (Hulme / Market St)",
+      totalBasketGBP: 10.85,
+      distanceMiles: 0.7,
+      walkMinutes: 14,
+      savingsVsCurrentGBP: 5.5,
+      tag: "Low Price",
+    },
+    {
+      storeName: "Asda Superstore (Hulme)",
+      totalBasketGBP: 12.4,
+      distanceMiles: 0.8,
+      walkMinutes: 16,
+      savingsVsCurrentGBP: 3.95,
+      tag: "Large Superstore",
+    },
+    {
+      storeName: "Sainsbury's Local (Oxford Rd)",
+      totalBasketGBP: 15.9,
+      distanceMiles: 0.2,
+      walkMinutes: 4,
+      savingsVsCurrentGBP: 0.45,
+      tag: "Convenience Store",
+    },
+    {
+      storeName: "Tesco Express (Current)",
+      totalBasketGBP: 16.35,
+      distanceMiles: 0.1,
+      walkMinutes: 2,
+      savingsVsCurrentGBP: 0,
+      tag: "Current Store",
+    },
+  ],
   items: [
-    { name: "Beef Mince 500g", category: "Meat & Dairy", priceGBP: 3.5, co2Kg: 11.5, impactLevel: "High" },
-    { name: "Mature Cheddar 400g", category: "Meat & Dairy", priceGBP: 3.4, co2Kg: 4.2, impactLevel: "High" },
-    { name: "Peru Asparagus", category: "Produce", priceGBP: 2.5, co2Kg: 1.9, impactLevel: "Medium" },
-    { name: "Milk 4 Pints", category: "Meat & Dairy", priceGBP: 1.45, co2Kg: 1.1, impactLevel: "Medium" },
-    { name: "Crisps Multipack", category: "Snacks & Drinks", priceGBP: 2.0, co2Kg: 0.4, impactLevel: "Low" },
-    { name: "Bananas 5pk", category: "Produce", priceGBP: 0.95, co2Kg: 0.3, impactLevel: "Low" },
+    { name: "Butter 400g", category: "Meat & Dairy", currentPriceGBP: 4.25, cheapestPriceGBP: 2.15, cheapestStore: "Lidl" },
+    { name: "Beef Mince 500g", category: "Meat & Dairy", currentPriceGBP: 3.75, cheapestPriceGBP: 2.49, cheapestStore: "Aldi" },
+    { name: "Cheddar 400g", category: "Meat & Dairy", currentPriceGBP: 3.6, cheapestPriceGBP: 2.35, cheapestStore: "Lidl" },
+    { name: "Crisps 6pk", category: "Snacks & Drinks", currentPriceGBP: 2.1, cheapestPriceGBP: 1.15, cheapestStore: "Lidl" },
+    { name: "Milk 4 Pints", category: "Meat & Dairy", currentPriceGBP: 1.55, cheapestPriceGBP: 1.45, cheapestStore: "Lidl" },
+    { name: "Bananas 5pk", category: "Produce", currentPriceGBP: 1.1, cheapestPriceGBP: 0.78, cheapestStore: "Aldi" },
   ],
   smartSwaps: [
     {
-      originalItem: "British Beef Steak Mince 500g (£3.50)",
-      swapSuggestion: "50/50 Chicken & Red Lentil Mince or Plant Mince (£2.20)",
-      co2SavedKg: 8.8,
-      moneySavedGBP: 1.3,
-      reason: "Ruminant beef methane accounts for nearly 60% of this basket's carbon footprint.",
+      originalItem: "Lurpak Spreadable 400g at Tesco Express (£4.25)",
+      betterDealSuggestion: "Danepak / Nordpak Spreadable 500g at Lidl (£2.15)",
+      targetStore: "Lidl Oxford Rd • 0.3 miles (6 min walk)",
+      moneySavedGBP: 2.1,
+      reason: "Convenience stores charge a 97% premium on branded butter compared to Lidl 300m down Oxford Road.",
     },
     {
-      originalItem: "Air-Freighted Peruvian Asparagus (£2.50)",
-      swapSuggestion: "Seasonal British Broccoli or Tenderstem (£1.20)",
-      co2SavedKg: 1.5,
-      moneySavedGBP: 1.3,
-      reason: "Eliminates air-freight emissions while cutting vegetable cost in half.",
+      originalItem: "Cathedral City Cheddar 400g (£3.60) + Crisps 6pk (£2.10)",
+      betterDealSuggestion: "Valley Spire Mature Cheddar 400g (£2.35) + Snackrite 6pk (£1.15)",
+      targetStore: "Lidl Oxford Rd • 0.3 miles (6 min walk)",
+      moneySavedGBP: 2.2,
+      reason: "Switching to discounter own-label dairy & snacks cuts £2.20 instantly with identical weight.",
     },
     {
-      originalItem: "Mature Cheddar 400g (£3.40)",
-      swapSuggestion: "Reduced-Portion Extra Mature 250g + Hummus (£2.65)",
-      co2SavedKg: 1.8,
-      moneySavedGBP: 0.75,
-      reason: "Stronger cheese requires less weight per meal for the same flavor hit.",
+      originalItem: "Beef Steak Mince 500g at Tesco Express (£3.75)",
+      betterDealSuggestion: "British 5% Lean Beef Mince 500g at Lidl/Aldi (£2.49)",
+      targetStore: "Lidl Oxford Rd • 0.3 miles (6 min walk)",
+      moneySavedGBP: 1.26,
+      reason: "Tesco Express adds a convenience store markup versus standard supermarket and discounter pricing.",
     },
   ],
 };
 
-const PIE_COLORS = ["#059669", "#0284c7", "#d97706", "#7c3aed"];
-
-export default function GreenBasketPage() {
-  const [data, setData] = useState<GreenBasketData>(INITIAL_DATA);
+export default function BasketScoutPage() {
+  const [data, setData] = useState<BasketComparisonData>(INITIAL_DATA);
+  const [postcode, setPostcode] = useState("M13 9PL");
   const [textList, setTextList] = useState("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Interactive Hour 3 States: Applied Swaps + Action Modal
   const [appliedSwapIndices, setAppliedSwapIndices] = useState<number[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [copiedList, setCopiedList] = useState(false);
@@ -168,7 +223,7 @@ export default function GreenBasketPage() {
 
     setLoading(true);
     setError("");
-    setAppliedSwapIndices([]); // Reset applied swaps on new scan
+    setAppliedSwapIndices([]);
 
     try {
       const res = await fetch("/api/analyze", {
@@ -178,20 +233,20 @@ export default function GreenBasketPage() {
           imageBase64: imgToSend,
           mimeType: "image/jpeg",
           textList: txtToSend,
+          postcode,
         }),
       });
 
       const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Failed to analyze basket");
+      if (!res.ok) throw new Error(result.error || "Failed to compare prices");
       setData(result);
     } catch (err: any) {
-      setError(err.message || "Error analyzing grocery basket.");
+      setError(err.message || "Error comparing grocery basket.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Toggle a swap on/off and recalculate live KPI metrics!
   const toggleSwap = (idx: number) => {
     setAppliedSwapIndices((prev) =>
       prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx]
@@ -202,29 +257,26 @@ export default function GreenBasketPage() {
     setAppliedSwapIndices(data.smartSwaps.map((_, idx) => idx));
   };
 
-  // Calculate active savings based on which swaps the user toggled on
-  const activeCo2Saved = appliedSwapIndices.reduce(
-    (sum, idx) => sum + (data.smartSwaps[idx]?.co2SavedKg || 0),
-    0
-  );
   const activeMoneySaved = appliedSwapIndices.reduce(
     (sum, idx) => sum + (data.smartSwaps[idx]?.moneySavedGBP || 0),
     0
   );
 
-  // Max possible savings across all 3 swaps
-  const maxCo2Savings = data.smartSwaps.reduce((sum, s) => sum + (s.co2SavedKg || 0), 0);
-  const maxMoneySavings = data.smartSwaps.reduce((sum, s) => sum + (s.moneySavedGBP || 0), 0);
-
-  // Live adjusted KPI numbers
-  const liveCostGBP = Math.max(0, data.totalCostGBP - activeMoneySaved);
-  const liveCo2Kg = Math.max(0.5, data.totalCo2Kg - activeCo2Saved);
-  const liveEcoScore = Math.min(
-    99,
-    Math.round(data.ecoScore + appliedSwapIndices.length * 14)
+  const maxSwapSavings = data.smartSwaps.reduce(
+    (sum, s) => sum + (s.moneySavedGBP || 0),
+    0
   );
 
-  // Generate plain-text WhatsApp/Telegram shopping list for the Action Modal
+  const bestStoreSavings = Math.max(
+    0,
+    data.currentBasketTotalGBP - data.cheapestBasketTotalGBP
+  );
+
+  const liveCostGBP = Math.max(
+    data.cheapestBasketTotalGBP,
+    data.currentBasketTotalGBP - activeMoneySaved
+  );
+
   const generateShoppingListText = () => {
     const swapsToUse =
       appliedSwapIndices.length > 0
@@ -232,20 +284,21 @@ export default function GreenBasketPage() {
         : data.smartSwaps;
 
     const lines = [
-      `🌱 *GreenBasket Smart Shopping List (${data.storeName})*`,
-      `📊 Eco Score: ${liveEcoScore}/100 | Est. Bill: £${liveCostGBP.toFixed(2)}`,
-      `🌍 Carbon Saved: -${(activeCo2Saved || maxCo2Savings).toFixed(1)} kg CO₂e | Money Saved: £${(activeMoneySaved || maxMoneySavings).toFixed(2)}`,
+      `🛒 *BasketScout Cheapest Store Plan (${postcode})*`,
+      `📍 Best Value Store: *${data.cheapestStoreName}* (£${data.cheapestBasketTotalGBP.toFixed(2)} vs £${data.currentBasketTotalGBP.toFixed(2)})`,
+      `💰 Instant Basket Saving: *£${(activeMoneySaved || bestStoreSavings).toFixed(2)}* (£${((activeMoneySaved || bestStoreSavings) * 52).toFixed(0)}/yr)`,
       ``,
-      `🔄 *Recommended Eco & Budget Swaps:*`,
+      `🔄 *Top Store & Brand Switches:*`,
       ...swapsToUse.map(
         (s, i) =>
-          `${i + 1}. Buy *${s.swapSuggestion}* instead of ${s.originalItem} (Save £${s.moneySavedGBP.toFixed(2)} & ${s.co2SavedKg.toFixed(1)}kg CO₂)`
+          `${i + 1}. Buy *${s.betterDealSuggestion}* at ${s.targetStore} instead of ${s.originalItem} (Save £${s.moneySavedGBP.toFixed(2)})`
       ),
       ``,
-      `✅ *Keep from Original Basket:*`,
-      ...data.items
-        .filter((item) => item.impactLevel === "Low")
-        .map((item) => `• ${item.name} (£${item.priceGBP.toFixed(2)})`),
+      `📊 *Nearby Store Totals for This Basket:*`,
+      ...data.storeComparisons.map(
+        (st) =>
+          `• ${st.storeName} (${st.distanceMiles} mi, ${st.walkMinutes}m walk): £${st.totalBasketGBP.toFixed(2)}`
+      ),
     ];
     return lines.join("\n");
   };
@@ -256,56 +309,61 @@ export default function GreenBasketPage() {
     setTimeout(() => setCopiedList(false), 2500);
   };
 
-  // Aggregate spend by category for the Donut Chart
-  const categoryData = Object.values(
-    data.items.reduce((acc: Record<string, { name: string; value: number }>, item) => {
-      if (!acc[item.category]) {
-        acc[item.category] = { name: item.category, value: 0 };
-      }
-      acc[item.category].value = Number((acc[item.category].value + item.priceGBP).toFixed(2));
-      return acc;
-    }, {})
-  );
-
   return (
     <main className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto">
       {/* Top Navbar */}
-      <header className="flex flex-wrap items-center justify-between gap-4 mb-8 bg-white p-5 rounded-2xl border border-emerald-200 shadow-sm">
+      <header className="flex flex-wrap items-center justify-between gap-4 mb-8 bg-white p-5 rounded-2xl border border-blue-200 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-emerald-600 text-white rounded-xl">
-            <Leaf className="w-6 h-6" />
+          <div className="p-2.5 bg-blue-600 text-white rounded-xl">
+            <Store className="w-6 h-6" />
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              GreenBasket AI
+              BasketScout UK
             </h1>
             <p className="text-xs text-slate-500">
-              Instant UK Supermarket Carbon & Student Budget Swapper
+              Instant Supermarket Price Comparison & Nearest Cheapest Shop Finder
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="text-xs font-semibold bg-emerald-50 text-emerald-800 px-3 py-2 rounded-full border border-emerald-200">
-            Detected Store: {data.storeName}
+          <div className="flex items-center gap-1.5 text-xs font-semibold bg-blue-50 text-blue-800 px-3 py-2 rounded-full border border-blue-200">
+            <MapPin className="w-3.5 h-3.5 text-blue-600" />
+            <span>Receipt Store: {data.detectedStore}</span>
           </div>
           <button
             onClick={() => setIsModalOpen(true)}
             className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition cursor-pointer shadow-sm"
           >
-            <ListChecks className="w-4 h-4 text-emerald-400" />
-            Export Smart Shopping List
+            <ListChecks className="w-4 h-4 text-blue-400" />
+            Export Cheapest Shop Plan
           </button>
         </div>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* LEFT COLUMN: Receipt Upload + Sample Pills (4 cols) */}
+        {/* LEFT COLUMN: Postcode + Receipt Upload + Sample Pills (4 cols) */}
         <section className="lg:col-span-4 space-y-6">
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            {/* Postcode Input for Nearest Store Calculation */}
+            <div className="mb-4">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mb-1.5">
+                <Navigation className="w-3.5 h-3.5 text-blue-600" />
+                Your Location / Postcode (For Nearest Shops)
+              </label>
+              <input
+                type="text"
+                value={postcode}
+                onChange={(e) => setPostcode(e.target.value)}
+                placeholder="e.g., M13 9PL or Fallowfield"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+            </div>
+
             <h2 className="text-base font-bold mb-3 flex items-center gap-2">
-              <Upload className="w-4 h-4 text-emerald-600" />
-              1. Snap or Upload Receipt Photo
+              <Upload className="w-4 h-4 text-blue-600" />
+              Snap or Upload Receipt Photo
             </h2>
 
             <input
@@ -320,7 +378,7 @@ export default function GreenBasketPage() {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={loading}
-              className="w-full border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-emerald-50/50 hover:bg-emerald-50 rounded-xl p-5 text-center transition cursor-pointer mb-4"
+              className="w-full border-2 border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/50 hover:bg-blue-50 rounded-xl p-5 text-center transition cursor-pointer mb-4"
             >
               {imagePreview ? (
                 <div className="space-y-2">
@@ -329,18 +387,18 @@ export default function GreenBasketPage() {
                     alt="Receipt preview"
                     className="max-h-36 mx-auto rounded-lg object-contain border border-slate-200"
                   />
-                  <span className="text-xs text-emerald-700 font-semibold block">
+                  <span className="text-xs text-blue-700 font-semibold block">
                     Click to Upload a Different Receipt Photo
                   </span>
                 </div>
               ) : (
                 <div className="space-y-1.5">
-                  <ImageIcon className="w-8 h-8 text-emerald-600 mx-auto" />
+                  <ImageIcon className="w-8 h-8 text-blue-600 mx-auto" />
                   <p className="text-sm font-semibold text-slate-700">
                     Upload Supermarket Receipt (JPG/PNG)
                   </p>
                   <p className="text-xs text-slate-500">
-                    Auto-compressed for fast Gemini Vision OCR
+                    Compares Aldi, Lidl, Asda, Tesco & Sainsbury&apos;s
                   </p>
                 </div>
               )}
@@ -362,7 +420,7 @@ export default function GreenBasketPage() {
                       setTextList(sample.text);
                       runAnalysis(null, sample.text);
                     }}
-                    className="text-left text-xs bg-slate-50 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 border border-slate-200 px-3 py-2 rounded-lg font-medium transition cursor-pointer"
+                    className="text-left text-xs bg-slate-50 hover:bg-blue-50 hover:text-blue-800 hover:border-blue-300 border border-slate-200 px-3 py-2 rounded-lg font-medium transition cursor-pointer"
                   >
                     {sample.label}
                   </button>
@@ -373,9 +431,9 @@ export default function GreenBasketPage() {
             <textarea
               value={textList}
               onChange={(e) => setTextList(e.target.value)}
-              placeholder="Or paste/type a shopping list (e.g., Beef mince £3.50, Cheddar £3.20, Oat milk £1.80)..."
-              rows={4}
-              className="w-full p-3 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600 mb-4"
+              placeholder="Or paste/type a shopping list (e.g., Beef mince £3.75, Cheddar £3.60, Lurpak £4.25)..."
+              rows={3}
+              className="w-full p-3 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-blue-600 mb-4"
             />
 
             {error && (
@@ -387,102 +445,160 @@ export default function GreenBasketPage() {
             <button
               onClick={() => runAnalysis()}
               disabled={loading || (!imagePreview && !textList.trim())}
-              className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition cursor-pointer"
+              className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition cursor-pointer"
             >
               <Sparkles className="w-4 h-4" />
-              {loading ? "Scanning Basket with Gemini Vision..." : "Analyze Carbon & Cost"}
+              {loading ? "Comparing Nearby Supermarkets..." : "Find Cheapest & Nearest Shop"}
             </button>
           </div>
         </section>
 
-        {/* RIGHT COLUMN: KPI Cards + Recharts + Interactive Smart Swaps (8 cols) */}
+        {/* RIGHT COLUMN: 4 KPI Cards + Store Distance Cards + Price Charts + Swaps (8 cols) */}
         <section className="lg:col-span-8 space-y-6">
-          {/* 4 Live KPI Metric Cards */}
+          {/* FIXED GRID WRAPPER FOR 4 KPI CARDS */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm transition-all">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
               <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                <span>Live Eco Score</span>
-                <Award className="w-4 h-4 text-emerald-600" />
-              </div>
-              <div className="text-2xl font-extrabold text-emerald-600">
-                {liveEcoScore}/100
-              </div>
-              <div className="text-[11px] text-slate-400">
-                {appliedSwapIndices.length > 0
-                  ? `+${appliedSwapIndices.length * 14} pts from swaps!`
-                  : "Click swaps below to boost"}
-              </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm transition-all">
-              <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                <span>Projected Spend</span>
-                <PoundSterling className="w-4 h-4 text-sky-600" />
+                <span>Current Receipt</span>
+                <PoundSterling className="w-4 h-4 text-slate-600" />
               </div>
               <div className="text-2xl font-extrabold text-slate-900">
                 £{liveCostGBP.toFixed(2)}
               </div>
               <div className="text-[11px] text-slate-400">
                 {activeMoneySaved > 0
-                  ? `Was £${data.totalCostGBP.toFixed(2)} (-£${activeMoneySaved.toFixed(2)})`
-                  : `${data.items.length} Items Detected`}
+                  ? `Was £${data.currentBasketTotalGBP.toFixed(2)} (-£${activeMoneySaved.toFixed(2)})`
+                  : `${data.items.length} Items Scanned`}
               </div>
             </div>
 
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm transition-all">
+            <div className="bg-white p-4 rounded-2xl border border-emerald-200 shadow-sm">
               <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                <span>Carbon Footprint</span>
-                <ShoppingBag className="w-4 h-4 text-amber-600" />
+                <span>Cheapest Shop</span>
+                <ShoppingBag className="w-4 h-4 text-emerald-600" />
               </div>
-              <div className="text-2xl font-extrabold text-amber-600">
-                {liveCo2Kg.toFixed(1)} <span className="text-sm font-normal">kg CO₂e</span>
+              <div className="text-2xl font-extrabold text-emerald-600">
+                £{data.cheapestBasketTotalGBP.toFixed(2)}
               </div>
-              <div className="text-[11px] text-slate-400">
-                {activeCo2Saved > 0
-                  ? `Cut ${activeCo2Saved.toFixed(1)} kg CO₂e!`
-                  : "Current Basket"}
+              <div className="text-[11px] font-semibold text-emerald-700 truncate">
+                At {data.cheapestStoreName}
               </div>
             </div>
 
-            <div className="bg-emerald-900 text-white p-4 rounded-2xl shadow-sm">
-              <div className="flex items-center justify-between text-xs text-emerald-200 mb-1">
-                <span>Potential Yearly Saving</span>
-                <TrendingDown className="w-4 h-4 text-emerald-300" />
+            <div className="bg-white p-4 rounded-2xl border border-blue-200 shadow-sm">
+              <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+                <span>Nearest vs Best</span>
+                <MapPin className="w-4 h-4 text-blue-600" />
               </div>
-              <div className="text-2xl font-extrabold text-emerald-300">
-                £{((activeMoneySaved || maxMoneySavings) * 52).toFixed(0)}/yr
+              <div className="text-lg font-extrabold text-blue-600 truncate">
+                {data.storeComparisons[0]?.distanceMiles || 0.3} mi away
               </div>
-              <div className="text-[11px] text-emerald-200">
-                & {((activeCo2Saved || maxCo2Savings) * 52).toFixed(0)} kg CO₂e/yr!
+              <div className="text-[11px] text-slate-500 truncate">
+                {data.storeComparisons[0]?.walkMinutes || 6} min walk to save £{bestStoreSavings.toFixed(2)}
+              </div>
+            </div>
+
+            <div className="bg-blue-950 text-white p-4 rounded-2xl shadow-sm">
+              <div className="flex items-center justify-between text-xs text-blue-200 mb-1">
+                <span>Yearly Saving</span>
+                <TrendingDown className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div className="text-2xl font-extrabold text-emerald-400">
+                £{((activeMoneySaved || bestStoreSavings || maxSwapSavings) * 52).toFixed(0)}/yr
+              </div>
+              <div className="text-[11px] text-blue-200">
+                Save £{(activeMoneySaved || bestStoreSavings).toFixed(2)} every weekly shop
               </div>
             </div>
           </div>
 
-          {/* Interactive Recharts Row */}
+          {/* Nearby Supermarket Distance & Basket Total Cards */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Navigation className="w-4 h-4 text-blue-600" />
+                Nearby Supermarkets Ranked by Basket Cost & Walking Distance ({data.userPostcode})
+              </h3>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+              {data.storeComparisons.map((store, idx) => {
+                const isCheapest = idx === 0;
+                return (
+                  <div
+                    key={idx}
+                    className={`p-3.5 rounded-xl border flex flex-col justify-between ${
+                      isCheapest
+                        ? "bg-emerald-50/80 border-emerald-400 shadow-xs"
+                        : "bg-slate-50/70 border-slate-200"
+                    }`}
+                  >
+                    <div>
+                      <span
+                        className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-1.5 ${
+                          isCheapest
+                            ? "bg-emerald-600 text-white"
+                            : "bg-slate-200 text-slate-700"
+                        }`}
+                      >
+                        {store.tag}
+                      </span>
+                      <h4 className="text-xs font-bold text-slate-900 leading-snug">
+                        {store.storeName}
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        📍 {store.distanceMiles} mi • {store.walkMinutes} min walk
+                      </p>
+                    </div>
+                    <div className="mt-3 pt-2 border-t border-slate-200/80 flex items-baseline justify-between">
+                      <span className="text-base font-extrabold text-slate-900">
+                        £{store.totalBasketGBP.toFixed(2)}
+                      </span>
+                      {store.savingsVsCurrentGBP > 0 ? (
+                        <span className="text-[11px] font-bold text-emerald-700">
+                          Save £{store.savingsVsCurrentGBP.toFixed(2)}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-400">Paid</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 2 Price Comparison Charts */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Chart 1: Total Basket Cost Across Nearby Stores */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
               <h3 className="text-sm font-bold text-slate-800 mb-1">
-                Carbon Impact per Item (kg CO₂e)
+                Same Basket Cost by Nearby Store (£)
               </h3>
               <p className="text-xs text-slate-400 mb-4">
-                Red = High Impact • Amber = Medium • Green = Low
+                Green = Cheapest Store • Blue = Alternatives • Slate = Current
               </p>
               <div className="h-60 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.items} layout="vertical" margin={{ left: 10, right: 20 }}>
+                  <BarChart
+                    data={data.storeComparisons}
+                    layout="vertical"
+                    margin={{ left: 10, right: 20 }}
+                  >
                     <XAxis type="number" fontSize={11} />
-                    <YAxis dataKey="name" type="category" width={105} fontSize={11} />
-                    <Tooltip formatter={(val: any) => [`${val} kg CO₂e`, "Carbon Footprint"]} />
-                    <Bar dataKey="co2Kg" radius={[0, 6, 6, 0]}>
-                      {data.items.map((entry, index) => (
+                    <YAxis dataKey="storeName" type="category" width={115} fontSize={11} />
+                    <Tooltip
+                      formatter={(val: any) => [`£${Number(val).toFixed(2)}`, "Basket Total"]}
+                    />
+                    <Bar dataKey="totalBasketGBP" radius={[0, 6, 6, 0]}>
+                      {data.storeComparisons.map((entry, index) => (
                         <Cell
                           key={`cell-${index}`}
                           fill={
-                            entry.impactLevel === "High"
-                              ? "#dc2626"
-                              : entry.impactLevel === "Medium"
-                              ? "#d97706"
-                              : "#059669"
+                            index === 0
+                              ? "#059669"
+                              : entry.savingsVsCurrentGBP === 0
+                              ? "#64748b"
+                              : "#2563eb"
                           }
                         />
                       ))}
@@ -492,57 +608,58 @@ export default function GreenBasketPage() {
               </div>
             </div>
 
+            {/* Chart 2: Item-by-Item Price Paid vs Cheapest Nearby */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
               <h3 className="text-sm font-bold text-slate-800 mb-1">
-                Spend Breakdown by Category (£)
+                Item Price: Receipt vs. Cheapest Nearby (£)
               </h3>
               <p className="text-xs text-slate-400 mb-4">
-                Where your grocery budget goes
+                Red = What You Paid • Green = Cheapest Nearby Store
               </p>
               <div className="h-60 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={categoryData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={45}
-                      outerRadius={75}
-                      paddingAngle={4}
-                    >
-                      {categoryData.map((_, idx) => (
-                        <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(val: any) => [`£${Number(val).toFixed(2)}`, "Spend"]} />
-                    <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
-                  </PieChart>
+                  <BarChart data={data.items} margin={{ left: 0, right: 10 }}>
+                    <XAxis dataKey="name" fontSize={10} />
+                    <YAxis fontSize={11} />
+                    <Tooltip formatter={(val: any) => `£${Number(val).toFixed(2)}`} />
+                    <Legend wrapperStyle={{ fontSize: "11px" }} />
+                    <Bar
+                      dataKey="currentPriceGBP"
+                      name="Receipt Price (£)"
+                      fill="#ef4444"
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="cheapestPriceGBP"
+                      name="Cheapest Nearby (£)"
+                      fill="#059669"
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
           </div>
 
-          {/* Interactive Smart Swaps Section */}
+          {/* Interactive Store & Item Switches */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-emerald-600" />
-                3 Cheaper-or-Equal-Cost UK Supermarket Swaps
+                <Sparkles className="w-5 h-5 text-blue-600" />
+                3 Biggest Price Drops at Nearby Supermarkets
               </h3>
               <div className="flex items-center gap-2">
                 <button
                   onClick={applyAllSwaps}
-                  className="text-xs font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 px-3 py-1.5 rounded-lg transition cursor-pointer"
+                  className="text-xs font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 px-3 py-1.5 rounded-lg transition cursor-pointer"
                 >
-                  Apply All 3 Swaps
+                  Apply All 3 Price Drops
                 </button>
                 <button
                   onClick={() => setIsModalOpen(true)}
                   className="text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 px-3 py-1.5 rounded-lg transition cursor-pointer"
                 >
-                  Generate Next Week&apos;s List ➔
+                  Generate Cheapest Shop List ➔
                 </button>
               </div>
             </div>
@@ -556,31 +673,32 @@ export default function GreenBasketPage() {
                     onClick={() => toggleSwap(idx)}
                     className={`p-4 rounded-xl border transition cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 ${
                       isApplied
-                        ? "bg-emerald-100/80 border-emerald-500 shadow-sm"
-                        : "bg-emerald-50/40 border-emerald-200 hover:border-emerald-400"
+                        ? "bg-blue-50/90 border-blue-500 shadow-sm"
+                        : "bg-slate-50/60 border-slate-200 hover:border-blue-400"
                     }`}
                   >
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center gap-2 text-sm font-bold">
                         <span className="line-through text-red-600">{swap.originalItem}</span>
                         <ArrowRight className="w-4 h-4 text-slate-400" />
-                        <span className="text-emerald-900">{swap.swapSuggestion}</span>
+                        <span className="text-blue-950">{swap.betterDealSuggestion}</span>
                       </div>
+                      <p className="text-xs font-semibold text-emerald-700 flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5" />
+                        {swap.targetStore}
+                      </p>
                       <p className="text-xs text-slate-600">{swap.reason}</p>
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="px-2.5 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg">
-                        -{swap.co2SavedKg.toFixed(1)} kg CO₂e
-                      </span>
-                      <span className="px-2.5 py-1 bg-sky-600 text-white text-xs font-bold rounded-lg">
                         Save £{swap.moneySavedGBP.toFixed(2)}
                       </span>
                       <button
                         type="button"
                         className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1 border ${
                           isApplied
-                            ? "bg-emerald-700 text-white border-emerald-700"
+                            ? "bg-blue-700 text-white border-blue-700"
                             : "bg-white text-slate-700 border-slate-300"
                         }`}
                       >
@@ -596,15 +714,15 @@ export default function GreenBasketPage() {
         </section>
       </div>
 
-      {/* INTERACTIVE ACTION MODAL: Smart Shopping List Generator */}
+      {/* INTERACTIVE ACTION MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 border border-slate-200 shadow-xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <ListChecks className="w-5 h-5 text-emerald-600" />
+                <ListChecks className="w-5 h-5 text-blue-600" />
                 <h3 className="text-lg font-bold text-slate-900">
-                  Your Optimized UK Shopping List
+                  Cheapest Nearby Shop Plan
                 </h3>
               </div>
               <button
@@ -616,7 +734,7 @@ export default function GreenBasketPage() {
             </div>
 
             <p className="text-xs text-slate-600">
-              Ready to paste into WhatsApp, Telegram, or Apple/Google Notes for your next supermarket run:
+              Ready to paste into WhatsApp, Telegram, or Notes before walking to the supermarket:
             </p>
 
             <pre className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs text-slate-800 whitespace-pre-wrap font-sans leading-relaxed max-h-64 overflow-y-auto">
@@ -632,7 +750,7 @@ export default function GreenBasketPage() {
               </button>
               <button
                 onClick={handleCopyShoppingList}
-                className="px-4 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center gap-1.5 cursor-pointer"
+                className="px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center gap-1.5 cursor-pointer"
               >
                 {copiedList ? (
                   <>
@@ -642,7 +760,7 @@ export default function GreenBasketPage() {
                 ) : (
                   <>
                     <Copy className="w-4 h-4" />
-                    <span>Copy Shopping List</span>
+                    <span>Copy Shop Plan</span>
                   </>
                 )}
               </button>
