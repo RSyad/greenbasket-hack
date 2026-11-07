@@ -220,7 +220,9 @@ export default function BasketScoutPage() {
   const [error, setError] = useState("");
 
   // Track which receipt items are toggled ON for savings (default: all items checked!)
-  const [selectedItemIndices, setSelectedItemIndices] = useState<number[]>();
+  const [selectedItemIndices, setSelectedItemIndices] = useState<number[]>(
+    INITIAL_DATA.items.map((_, i) => i)
+  );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [copiedList, setCopiedList] = useState(false);
 
