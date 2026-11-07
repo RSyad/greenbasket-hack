@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   MapPin,
   Upload,
@@ -8,11 +8,9 @@ import {
   TrendingDown,
   PoundSterling,
   ShoppingBag,
-  ArrowRight,
   Navigation,
   Zap,
   Image as ImageIcon,
-  CheckCircle2,
   ClipboardCheck,
   Copy,
   X,
@@ -20,17 +18,8 @@ import {
   Store,
   Receipt,
   Check,
+  Compass,
 } from "lucide-react";
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Cell,
-  Legend,
-} from "recharts";
 
 interface StoreComparison {
   storeName: string;
@@ -39,6 +28,8 @@ interface StoreComparison {
   walkMinutes: number;
   savingsVsCurrentGBP: number;
   tag: string;
+  lat: number;
+  lng: number;
 }
 
 interface BasketItem {
@@ -61,6 +52,8 @@ interface SmartSwap {
 interface BasketComparisonData {
   detectedStore: string;
   userPostcode: string;
+  userLat?: number;
+  userLng?: number;
   currentBasketTotalGBP: number;
   cheapestStoreName: string;
   cheapestBasketTotalGBP: number;
@@ -89,6 +82,8 @@ const SAMPLE_RECEIPTS = [
 const INITIAL_DATA: BasketComparisonData = {
   detectedStore: "Tesco Express (Oxford Rd, M13)",
   userPostcode: "M13 9PL (Manchester Uni)",
+  userLat: 53.4668,
+  userLng: -2.2339,
   currentBasketTotalGBP: 16.35,
   cheapestStoreName: "Lidl (Oxford Rd • 0.3 mi)",
   cheapestBasketTotalGBP: 9.87,
@@ -102,14 +97,18 @@ const INITIAL_DATA: BasketComparisonData = {
       walkMinutes: 6,
       savingsVsCurrentGBP: 6.48,
       tag: "Cheapest & Close",
+      lat: 53.4631,
+      lng: -2.2285,
     },
     {
-      storeName: "Aldi (Arndale / Hulme)",
+      storeName: "Aldi (Hulme)",
       totalBasketGBP: 10.15,
       distanceMiles: 0.7,
       walkMinutes: 14,
       savingsVsCurrentGBP: 6.2,
       tag: "Low Price",
+      lat: 53.4658,
+      lng: -2.2485,
     },
     {
       storeName: "Asda Superstore (Hulme)",
@@ -118,6 +117,8 @@ const INITIAL_DATA: BasketComparisonData = {
       walkMinutes: 16,
       savingsVsCurrentGBP: 4.45,
       tag: "Large Superstore",
+      lat: 53.4642,
+      lng: -2.2508,
     },
     {
       storeName: "Sainsbury's Local (Oxford Rd)",
@@ -126,6 +127,8 @@ const INITIAL_DATA: BasketComparisonData = {
       walkMinutes: 4,
       savingsVsCurrentGBP: 0.45,
       tag: "Convenience Store",
+      lat: 53.4701,
+      lng: -2.2369,
     },
     {
       storeName: "Tesco Express (Current)",
@@ -134,6 +137,8 @@ const INITIAL_DATA: BasketComparisonData = {
       walkMinutes: 2,
       savingsVsCurrentGBP: 0,
       tag: "Current Store",
+      lat: 53.4682,
+      lng: -2.2351,
     },
   ],
   items: [
@@ -219,14 +224,116 @@ export default function BasketScoutPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Track which receipt items are toggled ON for savings (default: all items checked!)
   const [selectedItemIndices, setSelectedItemIndices] = useState<number[]>(
     INITIAL_DATA.items.map((_, i) => i)
   );
+  const [activeStoreIdx, setActiveStoreIdx] = useState<number>(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [copiedList, setCopiedList] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+
+  // Render & update the interactive Leaflet Map whenever data or activeStoreIdx changes
+  useEffect(() => {
+    let retryTimer: any;
+
+    const initOrUpdateMap = () => {
+      const L = (window as any).L;
+      if (!L || !mapContainerRef.current) {
+        retryTimer = setTimeout(initOrUpdateMap, 150);
+        return;
+      }
+
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+
+      const userLat = data.userLat || 53.4668;
+      const userLng = data.userLng || -2.2339;
+
+      const map = L.map(mapContainerRef.current).setView([userLat, userLng], 14);
+      mapInstanceRef.current = map;
+
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      }).addTo(map);
+
+      // 1. Add User Location Marker (Pulsing Blue Badge)
+      const userIcon = L.divIcon({
+        className: "",
+        html: `<div style="background:#1e3a8a;color:#fff;padding:4px 10px;border-radius:999px;font-weight:800;font-size:11px;border:2px solid #fff;box-shadow:0 4px 10px rgba(0,0,0,0.25);white-space:nowrap;">
+          📍 You (${data.userPostcode.split(" ")[0] || "M13"})
+        </div>`,
+        iconSize: [90, 26],
+        iconAnchor: [45, 13],
+      });
+      L.marker([userLat, userLng], { icon: userIcon }).addTo(map);
+
+      const bounds: [number, number][] = [[userLat, userLng]];
+
+      // 2. Add Each Supermarket Marker + Walking Route Line
+      data.storeComparisons.forEach((store, idx) => {
+        const sLat = store.lat || userLat + (idx - 2) * 0.003;
+        const sLng = store.lng || userLng + (idx - 2) * 0.004;
+        bounds.push([sLat, sLng]);
+
+        const isCheapest = idx === 0;
+        const isSelected = idx === activeStoreIdx;
+        const isCurrent = store.savingsVsCurrentGBP === 0;
+
+        const bg = isCheapest ? "#059669" : isCurrent ? "#dc2626" : "#2563eb";
+        const scale = isSelected ? "transform:scale(1.1);z-index:999;" : "";
+
+        const storeIcon = L.divIcon({
+          className: "",
+          html: `<div style="background:${bg};color:#fff;padding:5px 9px;border-radius:10px;font-family:monospace;font-weight:800;font-size:11px;border:2px solid #fff;box-shadow:0 4px 12px rgba(0,0,0,0.22);white-space:nowrap;${scale}">
+            ${store.storeName.split("(")[0].trim()} • £${store.totalBasketGBP.toFixed(2)}
+            <div style="font-size:9px;font-family:sans-serif;font-weight:600;opacity:0.95;">
+              🚶 ${store.walkMinutes}m (${store.distanceMiles} mi) ${
+            store.savingsVsCurrentGBP > 0 ? `• Save £${store.savingsVsCurrentGBP.toFixed(2)}` : "• Paid"
+          }
+            </div>
+          </div>`,
+          iconSize: [140, 40],
+          iconAnchor: [70, 20],
+        });
+
+        const marker = L.marker([sLat, sLng], { icon: storeIcon }).addTo(map);
+        marker.on("click", () => setActiveStoreIdx(idx));
+
+        // Draw dashed walking route line from User to each Supermarket
+        L.polyline(
+          [
+            [userLat, userLng],
+            [sLat, sLng],
+          ],
+          {
+            color: isSelected ? "#059669" : "#94a3b8",
+            weight: isSelected ? 4 : 2,
+            dashArray: isSelected ? "6, 6" : "4, 8",
+            opacity: isSelected ? 0.95 : 0.5,
+          }
+        ).addTo(map);
+      });
+
+      if (bounds.length > 1) {
+        map.fitBounds(bounds, { padding: [45, 45] });
+      }
+    };
+
+    initOrUpdateMap();
+
+    return () => {
+      clearTimeout(retryTimer);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [data, activeStoreIdx]);
 
   const compressImageToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -287,8 +394,8 @@ export default function BasketScoutPage() {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Failed to compare prices");
       setData(result);
-      // Select all items by default on new receipt scan
       setSelectedItemIndices((result.items || []).map((_: any, i: number) => i));
+      setActiveStoreIdx(0);
     } catch (err: any) {
       setError(err.message || "Error comparing grocery basket.");
     } finally {
@@ -302,7 +409,6 @@ export default function BasketScoutPage() {
     );
   };
 
-  // Calculate live totals directly from the side-by-side receipt items
   const originalItemsTotal = data.items.reduce((sum, item) => sum + item.currentPriceGBP, 0);
 
   const optimizedItemsTotal = data.items.reduce((sum, item, idx) => {
@@ -350,7 +456,7 @@ export default function BasketScoutPage() {
               BasketScout UK
             </h1>
             <p className="text-xs text-slate-500">
-              Side-by-Side Receipt Price Optimizer & Nearest Cheapest Shop Finder
+              Side-by-Side Receipt Price Optimizer & Live Supermarket Distance Map
             </p>
           </div>
         </div>
@@ -377,7 +483,7 @@ export default function BasketScoutPage() {
             <div className="mb-4">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mb-1.5">
                 <Navigation className="w-3.5 h-3.5 text-blue-600" />
-                Your Location / Postcode (For Nearest Shops)
+                Your Location / Postcode (For Map Distance)
               </label>
               <input
                 type="text"
@@ -425,7 +531,7 @@ export default function BasketScoutPage() {
                     Upload Supermarket Receipt (JPG/PNG)
                   </p>
                   <p className="text-xs text-slate-500">
-                    Generates side-by-side cheaper receipt comparison
+                    Maps cheapest nearby shops & side-by-side receipt
                   </p>
                 </div>
               )}
@@ -475,12 +581,12 @@ export default function BasketScoutPage() {
               className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition cursor-pointer"
             >
               <Sparkles className="w-4 h-4" />
-              {loading ? "Comparing Receipts..." : "Compare Receipt Side-by-Side"}
+              {loading ? "Mapping Nearby Supermarkets..." : "Compare Receipt & Map Shops"}
             </button>
           </div>
         </section>
 
-        {/* RIGHT COLUMN: KPI Cards + SIDE-BY-SIDE RECEIPTS + Proximity & Charts (8 cols) */}
+        {/* RIGHT COLUMN: KPI Cards + SIDE-BY-SIDE RECEIPTS + INTERACTIVE MAP (8 cols) */}
         <section className="lg:col-span-8 space-y-6">
           {/* 4 KPI Metric Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -537,9 +643,7 @@ export default function BasketScoutPage() {
             </div>
           </div>
 
-          {/* ===================================================================== */}
-          {/* NEW: SIDE-BY-SIDE ORIGINAL RECEIPT VS. SAVED RECEIPT COMPARISON       */}
-          {/* ===================================================================== */}
+          {/* SIDE-BY-SIDE ORIGINAL RECEIPT VS. SAVED RECEIPT COMPARISON */}
           <div className="bg-slate-100 p-5 rounded-2xl border border-slate-200 shadow-inner">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
               <div>
@@ -570,8 +674,7 @@ export default function BasketScoutPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* LEFT RECEIPT: ORIGINAL RECEIPT */}
               <div className="bg-white rounded-xl border border-slate-300 shadow-sm overflow-hidden flex flex-col justify-between relative">
-                {/* Thermal Receipt Top Serrated Edge Accent */}
-                <div className="h-2 bg-repeating-linear-to-r from-slate-200 via-white to-slate-200 border-b border-dashed border-slate-300" />
+                <div className="h-2 bg-slate-200 border-b border-dashed border-slate-300" />
 
                 <div className="p-5 font-mono">
                   <div className="text-center border-b-2 border-dashed border-slate-300 pb-3 mb-4">
@@ -586,7 +689,6 @@ export default function BasketScoutPage() {
                     </p>
                   </div>
 
-                  {/* Line Items */}
                   <div className="divide-y divide-dashed divide-slate-200">
                     {data.items.map((item, idx) => (
                       <div
@@ -607,7 +709,6 @@ export default function BasketScoutPage() {
                   </div>
                 </div>
 
-                {/* Receipt Footer Total */}
                 <div className="bg-slate-50 p-4 border-t-2 border-dashed border-slate-300 font-mono">
                   <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
                     <span>ITEMS COUNT</span>
@@ -637,7 +738,6 @@ export default function BasketScoutPage() {
                     </p>
                   </div>
 
-                  {/* Line Items with Savings Badges */}
                   <div className="divide-y divide-dashed divide-emerald-100">
                     {data.items.map((item, idx) => {
                       const isSelected = selectedItemIndices.includes(idx);
@@ -693,7 +793,6 @@ export default function BasketScoutPage() {
                   </div>
                 </div>
 
-                {/* Right Receipt Footer Total + Total Saved */}
                 <div className="bg-emerald-950 text-white p-4 border-t-2 border-dashed border-emerald-700 font-mono">
                   <div className="flex items-center justify-between text-xs text-emerald-300 mb-1">
                     <span>YOU SAVE ({savingsPercentage}%)</span>
@@ -708,22 +807,48 @@ export default function BasketScoutPage() {
             </div>
           </div>
 
-          {/* Nearby Supermarket Distance & Basket Total Cards */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3">
-              <Navigation className="w-4 h-4 text-blue-600" />
-              Nearby Supermarkets Ranked by Distance & Basket Total ({data.userPostcode})
-            </h3>
+          {/* ===================================================================== */}
+          {/* NEW: LIVE INTERACTIVE SUPERMARKET DISTANCE & BASKET PRICE MAP         */}
+          {/* ===================================================================== */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Compass className="w-5 h-5 text-blue-600" />
+                  Live Supermarket Distance & Basket Price Map ({data.userPostcode})
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Click any supermarket card below to highlight its walking route and price pin on the map
+                </p>
+              </div>
+              <div className="flex items-center gap-3 text-xs font-semibold">
+                <span className="flex items-center gap-1 text-emerald-700">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block" /> Cheapest
+                </span>
+                <span className="flex items-center gap-1 text-blue-700">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block" /> Alternative
+                </span>
+                <span className="flex items-center gap-1 text-red-700">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-600 inline-block" /> Current
+                </span>
+              </div>
+            </div>
+
+            {/* Clickable Store Distance Selector Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
               {data.storeComparisons.map((store, idx) => {
                 const isCheapest = idx === 0;
+                const isSelected = idx === activeStoreIdx;
                 return (
                   <div
                     key={idx}
-                    className={`p-3.5 rounded-xl border flex flex-col justify-between ${
-                      isCheapest
-                        ? "bg-emerald-50/80 border-emerald-400 shadow-xs"
-                        : "bg-slate-50/70 border-slate-200"
+                    onClick={() => setActiveStoreIdx(idx)}
+                    className={`p-3 rounded-xl border transition cursor-pointer flex flex-col justify-between ${
+                      isSelected
+                        ? "bg-blue-50/90 border-blue-600 ring-2 ring-blue-500/30 shadow-xs"
+                        : isCheapest
+                        ? "bg-emerald-50/70 border-emerald-300 hover:border-emerald-500"
+                        : "bg-slate-50/70 border-slate-200 hover:border-slate-300"
                     }`}
                   >
                     <div>
@@ -739,8 +864,8 @@ export default function BasketScoutPage() {
                       <h4 className="text-xs font-bold text-slate-900 leading-snug">
                         {store.storeName}
                       </h4>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        📍 {store.distanceMiles} mi • {store.walkMinutes} min walk
+                      <p className="text-[11px] text-slate-600 font-medium mt-0.5">
+                        🚶 {store.walkMinutes} min walk ({store.distanceMiles} mi)
                       </p>
                     </div>
                     <div className="mt-3 pt-2 border-t border-slate-200/80 flex items-baseline justify-between">
@@ -759,77 +884,10 @@ export default function BasketScoutPage() {
                 );
               })}
             </div>
-          </div>
 
-          {/* 2 Price Comparison Charts */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-800 mb-1">
-                Same Basket Cost by Nearby Store (£)
-              </h3>
-              <p className="text-xs text-slate-400 mb-4">
-                Green = Cheapest Store • Blue = Alternatives • Slate = Current
-              </p>
-              <div className="h-56 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={data.storeComparisons}
-                    layout="vertical"
-                    margin={{ left: 10, right: 20 }}
-                  >
-                    <XAxis type="number" fontSize={11} />
-                    <YAxis dataKey="storeName" type="category" width={115} fontSize={11} />
-                    <Tooltip
-                      formatter={(val: any) => [`£${Number(val).toFixed(2)}`, "Basket Total"]}
-                    />
-                    <Bar dataKey="totalBasketGBP" radius={[0, 6, 6, 0]}>
-                      {data.storeComparisons.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={
-                            index === 0
-                              ? "#059669"
-                              : entry.savingsVsCurrentGBP === 0
-                              ? "#64748b"
-                              : "#2563eb"
-                          }
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-800 mb-1">
-                Item Price: Receipt vs. Cheapest Nearby (£)
-              </h3>
-              <p className="text-xs text-slate-400 mb-4">
-                Red = What You Paid • Green = Cheapest Nearby Store
-              </p>
-              <div className="h-56 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.items} margin={{ left: 0, right: 10 }}>
-                    <XAxis dataKey="name" fontSize={10} />
-                    <YAxis fontSize={11} />
-                    <Tooltip formatter={(val: any) => `£${Number(val).toFixed(2)}`} />
-                    <Legend wrapperStyle={{ fontSize: "11px" }} />
-                    <Bar
-                      dataKey="currentPriceGBP"
-                      name="Original Receipt (£)"
-                      fill="#ef4444"
-                      radius={[4, 4, 0, 0]}
-                    />
-                    <Bar
-                      dataKey="cheapestPriceGBP"
-                      name="Smart Saver Receipt (£)"
-                      fill="#059669"
-                      radius={[4, 4, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+            {/* Interactive Leaflet Street Map Container */}
+            <div className="relative rounded-xl overflow-hidden border border-slate-300 shadow-inner">
+              <div ref={mapContainerRef} className="h-96 w-full z-0" />
             </div>
           </div>
         </section>

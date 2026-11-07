@@ -20,6 +20,14 @@ const priceComparisonSchema: Schema = {
       type: Type.STRING,
       description: "Detected or default area (e.g., M13 9PL - Manchester Uni / Oxford Rd)",
     },
+    userLat: {
+      type: Type.NUMBER,
+      description: "Latitude of the user's postcode in Manchester (default: 53.4668)",
+    },
+    userLng: {
+      type: Type.NUMBER,
+      description: "Longitude of the user's postcode in Manchester (default: -2.2339)",
+    },
     currentBasketTotalGBP: {
       type: Type.NUMBER,
       description: "Total price of the current basket in GBP (£)",
@@ -43,7 +51,7 @@ const priceComparisonSchema: Schema = {
     storeComparisons: {
       type: Type.ARRAY,
       description:
-        "Comparison of total basket cost and walking distance across 4-5 nearby UK supermarkets (Aldi, Lidl, Asda, Tesco, Sainsbury's)",
+        "Comparison of total basket cost, walking distance, and real Manchester GPS coordinates across 5 nearby UK supermarkets",
       items: {
         type: Type.OBJECT,
         properties: {
@@ -57,11 +65,11 @@ const priceComparisonSchema: Schema = {
           },
           distanceMiles: {
             type: Type.NUMBER,
-            description: "Distance in miles from user (e.g., 0.4)",
+            description: "Distance in miles from user (e.g., 0.3)",
           },
           walkMinutes: {
             type: Type.NUMBER,
-            description: "Walking time in minutes (e.g., 8)",
+            description: "Walking time in minutes (e.g., 6)",
           },
           savingsVsCurrentGBP: {
             type: Type.NUMBER,
@@ -71,7 +79,15 @@ const priceComparisonSchema: Schema = {
           tag: {
             type: Type.STRING,
             description:
-              "'Cheapest Overall', 'Best Value + Close', 'Nearest Store', or 'Current Store'",
+              "'Cheapest & Close', 'Low Price', 'Large Superstore', 'Convenience Store', or 'Current Store'",
+          },
+          lat: {
+            type: Type.NUMBER,
+            description: "Realistic latitude in Manchester near the user (e.g., 53.4631)",
+          },
+          lng: {
+            type: Type.NUMBER,
+            description: "Realistic longitude in Manchester near the user (e.g., -2.2285)",
           },
         },
         required: [
@@ -81,6 +97,8 @@ const priceComparisonSchema: Schema = {
           "walkMinutes",
           "savingsVsCurrentGBP",
           "tag",
+          "lat",
+          "lng",
         ],
       },
     },
@@ -169,6 +187,8 @@ const priceComparisonSchema: Schema = {
   required: [
     "detectedStore",
     "userPostcode",
+    "userLat",
+    "userLng",
     "currentBasketTotalGBP",
     "cheapestStoreName",
     "cheapestBasketTotalGBP",
@@ -212,10 +232,10 @@ export async function POST(req: Request) {
       }).
 Analyze this supermarket receipt image or shopping list.
 1. Extract the items and prices in GBP (£).
-2. Compare the total cost of buying this exact basket across nearby UK supermarkets (e.g., Lidl Oxford Rd, Aldi Market St/Arndale, Asda Hulme, Sainsbury's Local, Tesco Express) with realistic walking distances in miles and minutes from ${
-        postcode || "M13 9PL"
+2. Compare the total cost of buying this exact basket across 5 nearby UK supermarkets (e.g., Lidl Oxford Rd, Aldi Hulme/Arndale, Asda Hulme, Sainsbury's Local Oxford Rd, Tesco Express Oxford Rd) with realistic walking distances in miles, walking minutes, and accurate Manchester latitude/longitude coordinates around ${
+        postcode || "M13 9PL (53.4668, -2.2339)"
       }.
-3. Suggest the 3 biggest money-saving switches (switching from convenience-store branded items to nearby Lidl/Aldi/Asda equivalents).
+3. Suggest the 3 biggest money-saving switches.
 ${textList ? `\nShopping List / Receipt Text:\n${textList}` : ""}`,
     });
 
