@@ -42,21 +42,36 @@ const priceComparisonSchema: Schema = {
     },
     storeComparisons: {
       type: Type.ARRAY,
-      description: "Comparison of total basket cost and walking distance across 4-5 nearby UK supermarkets (Aldi, Lidl, Asda, Tesco, Sainsbury's)",
+      description:
+        "Comparison of total basket cost and walking distance across 4-5 nearby UK supermarkets (Aldi, Lidl, Asda, Tesco, Sainsbury's)",
       items: {
         type: Type.OBJECT,
         properties: {
-          storeName: { type: Type.STRING, description: "Store name & branch (e.g., Lidl Oxford Rd)" },
-          totalBasketGBP: { type: Type.NUMBER, description: "Estimated total price for this basket in GBP (£)" },
-          distanceMiles: { type: Type.NUMBER, description: "Distance in miles from user (e.g., 0.4)" },
-          walkMinutes: { type: Type.NUMBER, description: "Walking time in minutes (e.g., 8)" },
+          storeName: {
+            type: Type.STRING,
+            description: "Store name & branch (e.g., Lidl Oxford Rd)",
+          },
+          totalBasketGBP: {
+            type: Type.NUMBER,
+            description: "Estimated total price for this basket in GBP (£)",
+          },
+          distanceMiles: {
+            type: Type.NUMBER,
+            description: "Distance in miles from user (e.g., 0.4)",
+          },
+          walkMinutes: {
+            type: Type.NUMBER,
+            description: "Walking time in minutes (e.g., 8)",
+          },
           savingsVsCurrentGBP: {
             type: Type.NUMBER,
-            description: "How much cheaper than the current store in GBP (0 if current store)",
+            description:
+              "How much cheaper than the current store in GBP (0 if current store)",
           },
           tag: {
             type: Type.STRING,
-            description: "'Cheapest Overall', 'Best Value + Close', 'Nearest Store', or 'Current Store'",
+            description:
+              "'Cheapest Overall', 'Best Value + Close', 'Nearest Store', or 'Current Store'",
           },
         },
         required: [
@@ -71,22 +86,37 @@ const priceComparisonSchema: Schema = {
     },
     items: {
       type: Type.ARRAY,
-      description: "List of 4 to 8 grocery items with current price vs cheapest nearby competitor price",
+      description:
+        "List of 4 to 8 grocery items with current price vs cheapest nearby competitor price",
       items: {
         type: Type.OBJECT,
         properties: {
-          name: { type: Type.STRING, description: "Original receipt item name" },
+          name: {
+            type: Type.STRING,
+            description: "Original receipt item name",
+          },
           cheapestItemName: {
             type: Type.STRING,
-            description: "Equivalent cheaper item name at the competitor store (e.g., own-brand equivalent)",
+            description:
+              "Equivalent cheaper item name at the competitor store (e.g., own-brand equivalent)",
           },
           category: {
             type: Type.STRING,
-            description: "Category (Meat & Dairy, Produce, Bakery & Pantry, Snacks & Drinks)",
+            description:
+              "Category (Meat & Dairy, Produce, Bakery & Pantry, Snacks & Drinks)",
           },
-          currentPriceGBP: { type: Type.NUMBER, description: "Price paid at current store (£)" },
-          cheapestPriceGBP: { type: Type.NUMBER, description: "Cheapest price at nearby Aldi/Lidl/Asda (£)" },
-          cheapestStore: { type: Type.STRING, description: "Store offering the cheapest price" },
+          currentPriceGBP: {
+            type: Type.NUMBER,
+            description: "Price paid at current store (£)",
+          },
+          cheapestPriceGBP: {
+            type: Type.NUMBER,
+            description: "Cheapest price at nearby Aldi/Lidl/Asda (£)",
+          },
+          cheapestStore: {
+            type: Type.STRING,
+            description: "Store offering the cheapest price",
+          },
         },
         required: [
           "name",
@@ -104,16 +134,35 @@ const priceComparisonSchema: Schema = {
       items: {
         type: Type.OBJECT,
         properties: {
-          originalItem: { type: Type.STRING, description: "Item & price at current store" },
+          originalItem: {
+            type: Type.STRING,
+            description: "Item & price at current store",
+          },
           betterDealSuggestion: {
             type: Type.STRING,
             description: "Equivalent item & price at cheaper nearby supermarket",
           },
-          targetStore: { type: Type.STRING, description: "Nearby store name & walking time (e.g., Lidl Oxford Rd • 6 min walk)" },
-          moneySavedGBP: { type: Type.NUMBER, description: "Money saved on this item in GBP (£)" },
-          reason: { type: Type.STRING, description: "Why this store/own-brand switch saves money" },
+          targetStore: {
+            type: Type.STRING,
+            description:
+              "Nearby store name & walking time (e.g., Lidl Oxford Rd • 6 min walk)",
+          },
+          moneySavedGBP: {
+            type: Type.NUMBER,
+            description: "Money saved on this item in GBP (£)",
+          },
+          reason: {
+            type: Type.STRING,
+            description: "Why this store/own-brand switch saves money",
+          },
         },
-        required: ["originalItem", "betterDealSuggestion", "targetStore", "moneySavedGBP", "reason"],
+        required: [
+          "originalItem",
+          "betterDealSuggestion",
+          "targetStore",
+          "moneySavedGBP",
+          "reason",
+        ],
       },
     },
   },
